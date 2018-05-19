@@ -19,12 +19,13 @@ description:         Simple finite state machine generator
 
 dependencies:
 - base >= 4.7 && < 5
+- array
 
 library:
   source-dirs: src
 
 executables:
-  sisyphus-exe:
+  sisyphus:
     main:                Main.hs
     source-dirs:         app
     ghc-options:

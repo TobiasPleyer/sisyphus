@@ -1,6 +1,7 @@
 module Main where
 
-import Lib
+import Sisyphus.Lexer (tokenize)
+import Sisyphus.Parser (parse)
 
 main :: IO ()
-main = someFunc
+main = getContents >>= print . parse . tokenize

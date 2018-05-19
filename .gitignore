@@ -2,4 +2,5 @@
 sisyphus.cabal
 *~
 Scanner.out
-src/Scan.hs
+src/Sisyphus/Parser.hs
+src/Sisyphus/Lexer.hs

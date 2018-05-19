@@ -39,19 +39,3 @@
     blink_on;
     blink_off;
     start_timer;
-
-%states # The states of the SM with inner properties
-    Open       { entry: @blink_off,
-                 entry: @start_timer }
-    Closed     { entry: @blink_off   }
-    MovingUp   { entry: @blink_on    }
-    MovingDown { entry: @blink_on    }
-
-%transitions
-    Open       -> MovingDown | timer_expired;
-    Closed     -> MovingUp   | rope_event;
-                             | key_event;
-    MovingUp   -> Open       | end_position_reached;
-    MovingDown -> Closed     | end_position_reached;
-               -> MovingUp   | rope_event;
-                             | key_event;

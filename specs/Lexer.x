@@ -1,5 +1,5 @@
 {
-module Main (main) where
+module Sisyphus.Lexer (Token(..), tokenize) where
 }
 
 %wrapper "basic"
@@ -27,7 +27,7 @@ tokens :-
   \% "actions"               { \s -> ActionsT }
   \% "states"                { \s -> StatesT }
   \% "transitions"           { \s -> TransitionsT }
-  @id                        { \s -> ID s }
+  @id                        { \s -> IdT s }
 
 {
 
@@ -38,11 +38,9 @@ data Token
   | ActionsT
   | StatesT
   | TransitionsT
-  | ID String
+  | IdT String
   | EOFT
   deriving Show
 
-main = do
-  s <- getContents
-  print (alexScanTokens s)
+tokenize = alexScanTokens
 }
