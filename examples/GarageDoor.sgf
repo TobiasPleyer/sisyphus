@@ -1,0 +1,57 @@
+#-------------------------------------------
+#-- My Garage Door -------------------------
+#-------------------------------------------
+#
+# My garage door is very simple. If you are
+# outside, you have to open it with a key.
+# When you are inside you can open it from
+# within the car by pulling a rope. 
+#
+# Features
+#   - The door will open when a key event or
+#     a rope pull event happens
+#   - When it opens it will move up until it
+#     reaches its end position.
+#   - When it closes it will move down until
+#     it reaches its end position.
+#   - While the door is moving (up or down)
+#     a lamp is blinking, signaling the
+#     driver to not drive yet
+#   - When the door is fully open, or fully
+#     closed the light will switch off
+#   - When the door is fully open a timer is
+#     started
+#   - When the door is open and the timer
+#     expires, then the door will start to
+#     move down
+#   - When the door is moving down, a key or
+#     rope event will stop the downwards
+#     movement and the door will start to
+#     move upwards again (opening)
+
+%events
+    rope_event;
+    key_event;
+    end_position_reached;
+    timer_expired;
+
+%actions
+    blink_on;
+    blink_off;
+    start_timer;
+
+%states # The states of the SM with inner properties
+    Open       { entry: @blink_off,
+                 entry: @start_timer };
+    Closed     { entry: @blink_off   };
+    MovingUp   { entry: @blink_on    };
+    MovingDown { entry: @blink_on    };
+
+%transitions
+    Open       -> MovingDown | timer_expired;
+    Closed     -> MovingUp   | rope_event;
+                             | key_event;
+    MovingUp   -> Open       | end_position_reached;
+    MovingDown -> Closed     | end_position_reached;
+               -> MovingUp   | rope_event;
+                             | key_event;
