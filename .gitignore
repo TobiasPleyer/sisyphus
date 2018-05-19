@@ -1,3 +1,5 @@
 .stack-work/
 sisyphus.cabal
 *~
+Scanner.out
+src/Scan.hs
