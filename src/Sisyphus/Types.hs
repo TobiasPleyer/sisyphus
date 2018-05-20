@@ -5,18 +5,12 @@ data RawStateMachine = RSM
   { rsmEvents :: [Event]
   , rsmActions :: [Action]
   , rsmStates :: [State]
-  , rsmTransitions :: [Transition]
+  , rsmTransitions :: [TransitionSpec]
   } deriving (Show)
 
 type Event  = String
 type Action = String
 type Guard  = String
-
-data Transition = Trans
-  { trSrc :: String
-  , trDest :: String
-  , trReacts :: [ReactionSpec]
-  } deriving (Show)
 
 data State = State
   { stName              :: String
@@ -29,6 +23,14 @@ data ReactionSpec = RSpec
   { rspecTrigger   :: Maybe Event
   , rspecGuards    :: [Guard]
   , rspecReactions :: [Reaction]
+  } deriving (Show)
+
+data TransitionSpec = TSpec
+  { tspecSrc       :: String
+  , tspecDst       :: String
+  , tspecTrigger   :: Maybe Event
+  , tspecGuards    :: [Guard]
+  , tspecReactions :: [Reaction]
   } deriving (Show)
 
 data Reaction = ActionCall Action
