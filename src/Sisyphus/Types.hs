@@ -10,20 +10,41 @@ data RawStateMachine = RSM
 
 type Event  = String
 type Action = String
+type Guard  = String
 
 data Transition = Trans
   { trSrc :: String
   , trDest :: String
-  , trReacts :: [Reaction]
+  , trReacts :: [ReactionSpec]
   } deriving (Show)
 
 data State = State
   { stName              :: String
-  , stEntryReactions    :: [Reaction]
-  , stExitReactions     :: [Reaction]
-  , stInternalReactions :: [Reaction]
+  , stEntryReactions    :: [ReactionSpec]
+  , stExitReactions     :: [ReactionSpec]
+  , stInternalReactions :: [ReactionSpec]
+  } deriving (Show)
+
+data ReactionSpec = RSpec
+  { rspecTrigger   :: Maybe Event
+  , rspecGuards    :: [Guard]
+  , rspecReactions :: [Reaction]
   } deriving (Show)
 
 data Reaction = ActionCall Action
               | EventEmit Event
               deriving (Show)
+
+data ReactionClassifier = ReactEntry
+                        | ReactExit
+                        | ReactInternal String
+                        deriving (Show)
+
+isEntry ReactEntry = True
+isEntry _          = False
+
+isExit ReactExit = True
+isExit _         = False
+
+isInternal (ReactInternal _) = True
+isInternal _                 = False
