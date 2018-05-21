@@ -15,7 +15,7 @@ exportGraphviz rsm fp =
     (hClose)
     $ \fh -> do
       hPutStrLn fh "digraph finite_state_machine {\n    rankdir=LR;\n    node [shape = box];"
-      forM_ (rsmTransitions rsm) (\t -> hPutStrLn fh (gvTransition t))
+      forM_ (rsmTransitions rsm) (hPutStrLn fh . gvTransition)
       hPutStr fh "}"
       where
         gvTransition :: TransitionSpec -> String
