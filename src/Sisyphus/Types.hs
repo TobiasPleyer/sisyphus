@@ -35,7 +35,11 @@ data TransitionSpec = TSpec
 
 data Reaction = ActionCall Action
               | EventEmit Event
-              deriving (Show)
+
+instance Show Reaction where
+  show (ActionCall a) = a ++ "()"
+  show (EventEmit e) = '^' : e
+  showsPrec _ _ = id
 
 data ReactionClassifier = ReactEntry
                         | ReactExit

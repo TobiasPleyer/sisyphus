@@ -1,7 +1,35 @@
 module Main where
 
+import Control.Exception (bracket)
+import Control.Monad (forM_)
+import System.IO (IOMode(..), openFile, hClose, hPutStr, hPutStrLn)
 import Sisyphus.Lexer (tokenize)
 import Sisyphus.Parser (parse)
+import Sisyphus.Types (RawStateMachine(..), TransitionSpec(..))
+
+
+exportGraphviz :: RawStateMachine -> FilePath -> IO ()
+exportGraphviz rsm fp =
+  bracket
+    (openFile fp WriteMode)
+    (hClose)
+    $ \fh -> do
+      hPutStrLn fh "digraph finite_state_machine {\n    rankdir=LR;\n    node [shape = box];"
+      forM_ (rsmTransitions rsm) (\t -> hPutStrLn fh (gvTransition t))
+      hPutStr fh "}"
+      where
+        gvTransition :: TransitionSpec -> String
+        gvTransition (TSpec src dst maybeEvent gs rs) = "    " ++ src ++ " -> " ++ dst ++ " [ label = \"" ++ transition_text ++ "\" ];"
+          where
+            transition_text = trigger_name ++ "/ " ++ guard_text ++ reaction_text
+            trigger_name = maybe "" (++ " ") maybeEvent
+            guard_text = "" -- TODO once guards are supported
+            reaction_text = foldr (\r acc -> (show r) ++ " " ++ acc) "" rs
+
 
 main :: IO ()
-main = getContents >>= print . parse . tokenize
+main = do
+  sgf <- getContents
+  let rsm = parse $ tokenize sgf
+  print rsm
+  exportGraphviz rsm "test.gv"
