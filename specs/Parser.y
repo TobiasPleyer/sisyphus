@@ -63,7 +63,7 @@ reactions : reaction           { [$1] }
 reaction : '@' ID              { ActionCall $2 }
          | '^' ID              { EventEmit $2 }
 
-transitions : TRANSITIONS transition_specifiers                    { reverse $2 }
+transitions : TRANSITIONS transition_specifiers                    { expandTransitions $ reverse $2 }
 transition_specifiers : transition_specifier                       { [$1] }
                       | transition_specifiers transition_specifier { $2 : $1 }
 transition_specifier : bar_definition                              { mkTransition (Nothing,$1) }
@@ -90,9 +90,25 @@ mkState name attrs =
 mkInternal (ReactInternal trigger, reactions) = RSpec (Just trigger) [] reactions
 mkInternal _ = error "Not supported"
 
-mkTransition (Nothing,trigger) = TSpec "" "" (Just trigger) [] []
-mkTransition (Just (Nothing,dst),trigger) = TSpec "" dst (Just trigger) [] []
-mkTransition (Just (Just src,dst),trigger) = TSpec src dst (Just trigger) [] []
+mkTransition (Nothing,trigger) = (Nothing,Nothing,(Just trigger),[],[])
+mkTransition (Just (Nothing,dst),trigger) = (Nothing,Just dst,Just trigger,[],[])
+mkTransition (Just (Just src,dst),trigger) = (Just src,Just dst,Just trigger,[],[])
+
+{-
+In grammar files it is possible to leave out source and destination if they are
+the same for the next transition definition. This function expands them so that
+each of them can exist as stand alone transitions, without the need of the
+context of the previous definitions.
+-}
+expandTransitions :: [(Maybe String, Maybe String, Maybe Event, [Guard], [Reaction])] -> [TransitionSpec]
+expandTransitions ts = go Nothing Nothing ts
+  where
+    go _ _ [] = []
+    go _ _ ts@(t@(Just src,Just dst,Just trigg,gs,rs):ts') = (TSpec src dst (Just trigg) gs rs) : go (Just src) (Just dst) ts'
+    go (Just src) _ ts@(t@(Nothing,Just dst,Just trigg,gs,rs):ts') = (TSpec src dst (Just trigg) gs rs) : go (Just src) (Just dst) ts'
+    go (Just src) (Just dst) ts@(t@(Nothing,Nothing,Just trigg,gs,rs):ts') = (TSpec src dst (Just trigg) gs rs) : go (Just src) (Just dst) ts'
+    go _ _ _ = error "Invalid transition definition!"
+
 
 parseError :: [Token] -> a
 parseError tks = error $ "Unexpected token: " ++ (show $ head tks)
