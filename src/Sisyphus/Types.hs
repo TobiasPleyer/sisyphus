@@ -2,7 +2,8 @@ module Sisyphus.Types where
 
 
 data RawStateMachine = RSM
-  { rsmEvents :: [Event]
+  { rsmName :: Maybe String
+  , rsmEvents :: [Event]
   , rsmActions :: [Action]
   , rsmStates :: [State]
   , rsmTransitions :: [TransitionSpec]

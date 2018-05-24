@@ -23,6 +23,7 @@ tokens :-
   @comment                   ;
   "->"                       { \s -> ArrowT }
   $special                   { \s -> SpecialT (head s) }
+  \% "name"                  { \s -> NameT }
   \% "events"                { \s -> EventsT }
   \% "actions"               { \s -> ActionsT }
   \% "states"                { \s -> StatesT }
@@ -34,6 +35,7 @@ tokens :-
 data Token
   = SpecialT Char
   | ArrowT
+  | NameT
   | EventsT
   | ActionsT
   | StatesT

@@ -20,9 +20,10 @@ import Sisyphus.Lexer
     '^'          { SpecialT '^'   }
     '/'          { SpecialT '/'   }
     '@'          { SpecialT '@'   }
-    ACTIONS      { ActionsT       }
     ARROW        { ArrowT         }
+    NAME         { NameT          }
     EVENTS       { EventsT        }
+    ACTIONS      { ActionsT       }
     STATES       { StatesT        }
     TRANSITIONS  { TransitionsT   }
     entryID      { IdT "entry"    }
@@ -32,7 +33,10 @@ import Sisyphus.Lexer
 
 %%
 
-sisyphus : events actions states transitions { RSM $1 $2 $3 $4 }
+sisyphus : name events actions states transitions { RSM $1 $2 $3 $4 $5 }
+
+name : NAME ID     { Just $2 }
+     | {- empty -} { Nothing }
 
 events : EVENTS event_specifiers                    { reverse $2 }
 event_specifiers : event_specifier                  { [$1] }

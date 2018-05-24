@@ -29,6 +29,8 @@
 #     movement and the door will start to
 #     move upwards again (opening)
 
+%name GarageDoorFSM
+
 %events
     rope_event;
     key_event;
