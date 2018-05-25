@@ -1,0 +1,7 @@
+digraph {{ FSM_NAME }} {
+    rankdir=LR;
+    node [shape = box];
+{% for transition in FSM_GV_TRANSITIONS %}
+    {{ transition }};
+{% endfor %}
+}
