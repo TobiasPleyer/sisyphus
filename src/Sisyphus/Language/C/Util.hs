@@ -20,29 +20,3 @@ outputSimpleEnum counter_name enum_name ss =
   . str ",\n} "
   . str enum_name
   . char ';'
-
-
-outputStateEnum :: String -> [State] -> ShowS
-outputStateEnum fsm_name = outputSimpleEnum (Just (fsm_name ++ "_NUM_STATES")) (fsm_name ++ "_state_t") . map stName
-
-
-outputEventEnum :: String -> [Event] -> ShowS
-outputEventEnum fsm_name = outputSimpleEnum (Just (fsm_name ++ "_NUM_EVENTS")) (fsm_name ++ "_event_t")
-
-
-outputActionProtos :: [Action] -> ShowS
-outputActionProtos as =
-    str "typedef void action_function_t (void);" . nl2
-  . interleave_shows nl as'
-  where
-    as' = map (enclose "action_function_t " ";") as
-
-
-outputHandlerProtos :: RawStateMachine -> ShowS
-outputHandlerProtos rsm =
-  let states = rsmStates rsm
-      transitions = rsmTransitions rsm
-  in  str "typedef void handler_function_t (void);" . nl2
-
-
-outputTransitionTable = undefined
