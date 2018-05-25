@@ -35,8 +35,8 @@ import Sisyphus.Lexer
 
 sisyphus : name events actions states transitions { RSM $1 $2 $3 $4 $5 }
 
-name : NAME ID     { Just $2 }
-     | {- empty -} { Nothing }
+name : NAME ID     { $2 }
+     | {- empty -} { "FSM" }
 
 events : EVENTS event_specifiers                    { reverse $2 }
 event_specifiers : event_specifier                  { [$1] }

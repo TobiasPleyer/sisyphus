@@ -2,7 +2,7 @@ module Sisyphus.Types where
 
 
 data RawStateMachine = RSM
-  { rsmName        :: Maybe String
+  { rsmName        :: String
   , rsmEvents      :: [Event]
   , rsmActions     :: [Action]
   , rsmStates      :: [State]

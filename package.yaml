@@ -20,6 +20,9 @@ description:         Simple finite state machine generator
 dependencies:
 - base >= 4.7 && < 5
 - array
+- containers
+- ginger
+- text
 
 library:
   source-dirs: src

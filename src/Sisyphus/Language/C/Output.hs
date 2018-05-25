@@ -53,7 +53,7 @@ header_generic_post fsm_name =
 
 outputSimple :: RawStateMachine -> IO ()
 outputSimple rsm = do
-  let fsm_name = maybe "FSM" id (rsmName rsm)
+  let fsm_name = rsmName rsm
       header_file = fsm_name ++ ".h"
       source_file = fsm_name ++ ".c"
       header_content = interleave_shows nl2 [header_generic_pre fsm_name
