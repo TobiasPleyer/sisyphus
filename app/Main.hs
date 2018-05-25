@@ -6,6 +6,7 @@ import System.IO (IOMode(..), openFile, hClose, hPutStr, hPutStrLn)
 import Sisyphus.Lexer (tokenize)
 import Sisyphus.Parser (parse)
 import Sisyphus.Types (RawStateMachine(..), TransitionSpec(..))
+import qualified Sisyphus.Language.C.Output as C
 
 
 exportGraphviz :: RawStateMachine -> FilePath -> IO ()
@@ -31,5 +32,5 @@ main :: IO ()
 main = do
   sgf <- getContents
   let rsm = parse $ tokenize sgf
-  print rsm
   exportGraphviz rsm "test.gv"
+  C.outputSimple rsm
