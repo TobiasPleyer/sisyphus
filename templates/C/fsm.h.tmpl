@@ -1,0 +1,32 @@
+#ifndef {{ FSM_NAME }}_H
+#define {{ FSM_NAME }}_H
+
+typedef enum {
+{% for event in FSM_EVENTS %}
+    {{ event }},
+{% endfor %}
+} {{ FSM_NAME }}_event_t;
+
+typedef enum {
+{% for state in FSM_STATES %}
+    {{ state }},
+{% endfor %}
+} {{ FSM_NAME }}_state_t;
+
+typedef void action_function_t (void);
+
+{% for action in FSM_ACTIONS %}
+    action_function_t {{ action }};
+{% endfor %}
+
+struct {{ FSM_NAME }}_t {
+    {{ FSM_NAME }}_state_t current_state;
+}
+
+struct {{ FSM_NAME }}_t {{ FSM_NAME }};
+
+void {{ FSM_NAME }}_Init(void);
+
+unsigned char {{ FSM_NAME }}_Dispatch({{ FSM_NAME }}_event_t event);
+
+#endif
