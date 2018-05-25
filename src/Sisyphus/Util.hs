@@ -10,6 +10,15 @@ char c = (c :)
 nl :: String -> String
 nl = char '\n'
 
+nl2 :: String -> String
+nl2 = str "\n\n"
+
+nl3 :: String -> String
+nl3 = str "\n\n\n"
+
+enclose :: String -> String -> String -> String -> String
+enclose left right middle = str left . str middle . str right
+
 paren :: (String -> String) -> String -> String
 paren s = char '(' . s . char ')'
 
