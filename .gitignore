@@ -4,3 +4,4 @@ sisyphus.cabal
 Scanner.out
 src/Sisyphus/Parser.hs
 src/Sisyphus/Lexer.hs
+tmp/
