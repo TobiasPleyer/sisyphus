@@ -8,13 +8,8 @@ import Sisyphus.Types
 import Sisyphus.Language (supportedTargets)
 
 
-main :: IO ()
-main = do
-  sgf <- getContents
-  let rsm = parse $ tokenize sgf
-      outFile = (rsmName rsm) ++ ".gv"
-      target = "Graphviz_Simple"
-      maybeRenderFunc = M.lookup target supportedTargets
+tryRenderTarget target rsm outFile = do
+  let maybeRenderFunc = M.lookup target supportedTargets
   case maybeRenderFunc of
     Nothing -> do
       putStrLn $ "Target '" ++ target ++ "' is not supported!"
@@ -23,3 +18,12 @@ main = do
       putStrLn $ "Rendering target '" ++ target ++ "' to file " ++ outFile ++ "..."
       renderFunc rsm outFile
       putStrLn "Done"
+
+
+main :: IO ()
+main = do
+  sgf <- getContents
+  let rsm = parse $ tokenize sgf
+      fsm_name = rsmName rsm
+  tryRenderTarget "Graphviz_Simple" rsm ("tmp/" ++ fsm_name ++ ".gv")
+  tryRenderTarget "C_Simple" rsm ("tmp/" ++ fsm_name ++ ".h")

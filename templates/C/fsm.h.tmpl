@@ -5,18 +5,20 @@ typedef enum {
 {% for event in FSM_EVENTS %}
     {{ event }},
 {% endfor %}
+    {{ FSM_NAME }}_NUM_EVENTS,
 } {{ FSM_NAME }}_event_t;
 
 typedef enum {
 {% for state in FSM_STATES %}
     {{ state }},
 {% endfor %}
+    {{ FSM_NAME }}_NUM_STATES,
 } {{ FSM_NAME }}_state_t;
 
 typedef void action_function_t (void);
 
 {% for action in FSM_ACTIONS %}
-    action_function_t {{ action }};
+action_function_t {{ action }};
 {% endfor %}
 
 struct {{ FSM_NAME }}_t {

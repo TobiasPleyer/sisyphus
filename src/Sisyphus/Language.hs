@@ -5,6 +5,8 @@ module Sisyphus.Language
 
 import qualified Data.Map as M
 import Sisyphus.Language.Graphviz (renderGvSimple)
+import Sisyphus.Language.C (renderCSimple)
 
 
-supportedTargets = M.fromList [ ("Graphviz_Simple", renderGvSimple) ]
+supportedTargets = M.fromList [ ("Graphviz_Simple", renderGvSimple)
+                              , ("C_Simple", renderCSimple)]
