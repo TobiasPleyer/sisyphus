@@ -18,6 +18,19 @@ import Sisyphus.Language.Template (defaultTemplateLoader, renderTemplate)
 gvTemplateSimple = "Graphviz/fsm.gv.tmpl"
 
 
+renderGvSimple :: RawStateMachine -> FilePath -> IO ()
+renderGvSimple rsm outFile = do
+  gvTempl <- parseGingerFile defaultTemplateLoader gvTemplateSimple
+  case gvTempl of
+    Left err -> do
+      putStrLn "Failed to load the target!"
+      exitWith (ExitFailure 2)
+    Right gvTemplate -> do
+      let
+        gvContext  = mkGvContext rsm
+      renderTemplate gvContext gvTemplate outFile
+
+
 gvTransition :: TransitionSpec -> T.Text
 gvTransition (TSpec src dst maybeEvent gs rs) =
   T.pack $ src ++ " -> " ++ dst ++ " [ label = \"" ++ transition_text ++ "\" ]"
@@ -35,16 +48,3 @@ mkGvContext rsm = makeContextText contextLookup
                             ,("FSM_GV_TRANSITIONS",toGVal transitions)]
     fsm_name = T.pack $ rsmName rsm
     transitions = map gvTransition (rsmTransitions rsm)
-
-
-renderGvSimple :: RawStateMachine -> FilePath -> IO ()
-renderGvSimple rsm outFile = do
-  gvTempl <- parseGingerFile defaultTemplateLoader gvTemplateSimple
-  case gvTempl of
-    Left err -> do
-      putStrLn "Failed to load the target!"
-      exitWith (ExitFailure 2)
-    Right gvTemplate -> do
-      let
-        gvContext  = mkGvContext rsm
-      renderTemplate gvContext gvTemplate outFile
