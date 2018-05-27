@@ -1,4 +1,6 @@
-module Sisyphus.Compiler where
+module Sisyphus.Compiler
+( mkTransitionFunctions
+)where
 
 
 import Data.Either (isRight)
@@ -6,7 +8,7 @@ import qualified Data.Map as M
 import Sisyphus.Types
 
 
-validateRSM :: RawStateMachine -> Either String ()
+validateRSM :: RawStateMachine -> Either StateMachineError ()
 validateRSM = undefined
 
 isValidRSM :: RawStateMachine -> Bool
@@ -31,14 +33,34 @@ isValidRSM = isRight . validateRSM
 -- * All entry reactions of the target state
 --
 -- * Internal transitions are handled as a self transition of the state without
--- entry or exit reactions.
+-- entry or exit reactions and will be added to the map by another function.
 --
 -- The transition functions will be assigned a unique name of the form
 -- /from_{state name}_on_{event name}/. If this name appears more than once
 -- this is treated as an ambiguity exception.
-mkTransitionFunctions :: RawStateMachine -> M.Map (State,Event) TFuncSpec
-mkTransitionFunctions rsm = addTransitions M.empty states transs
+mkTransitionFunctions :: RawStateMachine -> Either StateMachineError (M.Map (String,Event) TFuncSpec)
+mkTransitionFunctions rsm = addTransitions M.empty stateMap transs
   where states = rsmStates rsm
         transs = rsmTransitions rsm
-        addTransitions :: (M.Map (State,Event) TFuncSpec) -> [State] -> [TransitionSpec] -> (M.Map (State,Event) TFuncSpec)
-        addTransitions = undefined
+        stateMap = M.fromList (zip (map stName states) states)
+        addTransitions m sMap [] = addInternalReactions m states
+        addTransitions m sMap (t@(TSpec tSrc tDst Nothing _gs tReacts):ts) = Left "Transition doesn't have trigger"
+        addTransitions m sMap (t@(TSpec tSrc tDst (Just tTrigg) _gs tReacts):ts) =
+          let srcState = (M.!) sMap tSrc
+              dstState = (M.!) sMap tDst
+              tFuncName = "from_" ++ tSrc ++ "_on_" ++ tTrigg
+              actionsToPerform = ((concat . map rspecReactions . stExitReactions) srcState
+                                  ++
+                                  tReacts
+                                  ++
+                                  (concat . map rspecReactions . stEntryReactions) dstState)
+          in
+            if (tSrc,tTrigg) `M.member` m
+            then Left ("Ambigous translation from state " ++ tSrc ++ " on event " ++ tTrigg)
+            else
+              let m' = M.insert (tSrc,tTrigg) actionsToPerform m
+              in addTransitions m' sMap ts
+
+
+addInternalReactions :: (M.Map (String,Event) TFuncSpec) -> [State] -> Either StateMachineError (M.Map (String,Event) TFuncSpec)
+addInternalReactions m ss = Right m

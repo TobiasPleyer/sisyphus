@@ -1,6 +1,8 @@
 module Sisyphus.Types where
 
 
+type StateMachineError = String
+
 data RawStateMachine = RSM
   { rsmName        :: String
   , rsmEvents      :: [Event]
@@ -12,6 +14,7 @@ data RawStateMachine = RSM
 type Event  = String
 type Action = String
 type Guard  = String
+type TFuncSpec = [Reaction]
 
 data State = State
   { stName              :: String
@@ -33,8 +36,6 @@ data TransitionSpec = TSpec
   , tspecGuards    :: [Guard]
   , tspecReactions :: [Reaction]
   } deriving (Show)
-
-newtype TFuncSpec = TFS [Reaction]
 
 data Reaction = ActionCall Action
               | EventEmit Event
