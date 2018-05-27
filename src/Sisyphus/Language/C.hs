@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Sisyphus.Language.C
-( renderCSimple
+( renderCSimple, mkCContext
 ) where
 
 

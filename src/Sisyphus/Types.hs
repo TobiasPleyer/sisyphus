@@ -34,6 +34,8 @@ data TransitionSpec = TSpec
   , tspecReactions :: [Reaction]
   } deriving (Show)
 
+newtype TFuncSpec = TFS [Reaction]
+
 data Reaction = ActionCall Action
               | EventEmit Event
 
