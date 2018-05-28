@@ -1,7 +1,23 @@
 module Sisyphus.Types where
 
 
-type StateMachineError = String
+type StateMachineError = SmUnknownEventError String
+                       | SmUnknownActionError String
+                       | SmUnknownStateError String
+                       | SmAmbiguityError State Event
+                       | SmNoTriggerError (Either State TransitionSpec)
+                       | SmCustomError String
+
+instance Show StateMachineError where
+  show SmUnknownEventError s = "Event " ++ s ++ " is not defined in the grammar file!"
+  show SmUnknownActionError s = "Action " ++ s ++ " is not defined in the grammar file!"
+  show SmUnknownStateError s = "State " ++ s ++ " is not defined in the grammar file!"
+  show SmAmbiguityError s e = "Ambiguous transition rules for state " ++ (stName s) ++ " for event " ++ e ++ "!"
+  show SmNoTriggerError (Left s) = "State " ++ (stName s) ++ " has an internal reaction without trigger!"
+  show SmNoTriggerError (Right t) = "Transition from state " ++ (stName (tspecSrc t)) ++ " to state " ++ (stName (tspecDst t)) ++ " without trigger!"
+  show SmCustomError s = s
+
+  showsPrec _ _ = id
 
 data RawStateMachine = RSM
   { rsmName        :: String
@@ -41,6 +57,12 @@ data TransitionSpec = TSpec
 
 data Reaction = ActionCall Action
               | EventEmit Event
+
+isActionCall ActionCall _ = True
+isActionCall _            = False
+
+isEventEmit EventEmit _ = True
+isEventEmit _           = False
 
 instance Show Reaction where
   show (ActionCall a) = a ++ "()"
