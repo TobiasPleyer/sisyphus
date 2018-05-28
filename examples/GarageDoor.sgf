@@ -43,9 +43,9 @@
     start_timer;
 
 %states # The states of the SM with inner properties
+    Closed     { entry: @blink_off   }
     Open       { entry: @blink_off,
                  entry: @start_timer }
-    Closed     { entry: @blink_off   }
     MovingUp   { entry: @blink_on    }
     MovingDown { entry: @blink_on    }
 
