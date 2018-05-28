@@ -1,6 +1,6 @@
 module Main where
 
-import qualified Data.Map as M
+import qualified Data.Map.Strict as M
 import System.Exit (ExitCode(..), exitWith)
 import Sisyphus.Lexer (tokenize)
 import Sisyphus.Parser (parse)

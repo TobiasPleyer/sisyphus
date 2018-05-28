@@ -3,7 +3,7 @@ module Sisyphus.Language
 )where
 
 
-import qualified Data.Map as M
+import qualified Data.Map.Strict as M
 import Sisyphus.Language.Graphviz (renderGvSimple)
 import Sisyphus.Language.C (renderCSimple)
 

@@ -1,6 +1,9 @@
 module Sisyphus.Util where
 
 
+import Sisyphus.Types
+
+
 str :: String -> String -> String
 str = showString
 
@@ -31,3 +34,13 @@ interleave_shows s xs = foldr1 (\a b -> a . s . b) xs
 
 space :: String -> String
 space = char ' '
+
+addIngoingTransition :: TransitionSpec -> State -> State
+addIngoingTransition t s = let ins = stIngoing s
+                               s' = s{stIngoing=(t:ins)}
+                           in s'
+
+addOutgoingTransition :: TransitionSpec -> State -> State
+addOutgoingTransition t s = let outs = stOutgoing s
+                                s' = s{stOutgoing=(t:outs)}
+                            in s'

@@ -21,6 +21,8 @@ data State = State
   , stEntryReactions    :: [ReactionSpec]
   , stExitReactions     :: [ReactionSpec]
   , stInternalReactions :: [ReactionSpec]
+  , stIngoing           :: [TransitionSpec]
+  , stOutgoing          :: [TransitionSpec]
   } deriving (Show)
 
 data ReactionSpec = RSpec

@@ -1,18 +1,33 @@
 module Sisyphus.Compiler
-( mkTransitionFunctions
+( mkTransitionFunctions,
+  walkTransitions
 )where
 
 
+import Data.Maybe (fromJust)
 import Data.Either (isRight)
-import qualified Data.Map as M
+import qualified Data.Map.Strict as M
 import Sisyphus.Types
+import Sisyphus.Util (addIngoingTransition, addOutgoingTransition)
 
 
 validateRSM :: RawStateMachine -> Either StateMachineError ()
 validateRSM = undefined
 
+
 isValidRSM :: RawStateMachine -> Bool
 isValidRSM = isRight . validateRSM
+
+
+walkTransitions :: RawStateMachine -> RawStateMachine
+walkTransitions rsm@(RSM name es as ss ts) = go sm ts
+  where stateNames = map stName ss
+        sm = M.fromList (zip stateNames ss)
+        go sm [] = RSM name es as (map ((M.!) sm) stateNames) ts
+        go sm (tran@(TSpec src dst _ _ _):ts') =
+          let sm'  = M.update (Just . addOutgoingTransition tran) src sm
+              sm'' = M.update (Just . addIngoingTransition  tran) dst sm'
+          in go sm'' ts'
 
 
 -- | This function is the key point of the implementation.
@@ -44,7 +59,7 @@ mkTransitionFunctions rsm = addTransitions M.empty stateMap transs
         transs = rsmTransitions rsm
         stateMap = M.fromList (zip (map stName states) states)
         addTransitions m sMap [] = addInternalReactions m states
-        addTransitions m sMap (t@(TSpec tSrc tDst Nothing _gs tReacts):ts) = Left "Transition doesn't have trigger"
+        addTransitions m sMap (t@(TSpec tSrc tDst Nothing _gs tReacts):ts) = Left "External transition without trigger"
         addTransitions m sMap (t@(TSpec tSrc tDst (Just tTrigg) _gs tReacts):ts) =
           let srcState = (M.!) sMap tSrc
               dstState = (M.!) sMap tDst

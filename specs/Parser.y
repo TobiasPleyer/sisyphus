@@ -89,7 +89,7 @@ mkState name attrs =
     allExits = map ((RSpec Nothing []) . snd) exits
     allInternals = map mkInternal internals
   in
-    State name allEntries allExits allInternals
+    State name allEntries allExits allInternals [] []
 
 mkInternal (ReactInternal trigger, reactions) = RSpec (Just trigger) [] reactions
 mkInternal _ = error "Not supported"

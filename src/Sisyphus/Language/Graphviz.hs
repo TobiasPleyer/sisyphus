@@ -5,7 +5,7 @@ module Sisyphus.Language.Graphviz
 ) where
 
 
-import qualified Data.Map as M
+import qualified Data.Map.Strict as M
 import qualified Data.Text as T
 import System.Exit (ExitCode(..), exitWith)
 import Text.Ginger
