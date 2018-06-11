@@ -8,7 +8,7 @@ import Sisyphus.Types
 import Sisyphus.Language (supportedTargets)
 
 
-tryRenderTarget target rsm outFile = do
+tryRenderTarget target vsm outFile = do
   let maybeRenderFunc = M.lookup target supportedTargets
   case maybeRenderFunc of
     Nothing -> do
@@ -16,7 +16,7 @@ tryRenderTarget target rsm outFile = do
       exitWith (ExitFailure 1)
     Just renderFunc -> do
       putStrLn $ "Rendering target '" ++ target ++ "' to file " ++ outFile ++ "..."
-      renderFunc rsm outFile
+      renderFunc vsm outFile
       putStrLn "Done"
 
 
@@ -25,5 +25,6 @@ main = do
   sgf <- getContents
   let rsm = parse $ tokenize sgf
       fsm_name = rsmName rsm
-  tryRenderTarget "Graphviz_Simple" rsm ("tmp/" ++ fsm_name ++ ".gv")
-  tryRenderTarget "C_Simple" rsm ("tmp/" ++ fsm_name ++ ".h")
+  --tryRenderTarget "Graphviz_Simple" rsm ("tmp/" ++ fsm_name ++ ".gv")
+  --tryRenderTarget "C_Simple" rsm ("tmp/" ++ fsm_name ++ ".h")
+  print "Done"

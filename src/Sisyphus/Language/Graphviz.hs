@@ -11,15 +11,15 @@ import System.Exit (ExitCode(..), exitWith)
 import Text.Ginger
        (makeContextText, Template, toGVal, runGinger, parseGingerFile, VarName)
 import Text.Ginger.GVal (ToGVal, GVal)
-import Sisyphus.Types (RawStateMachine(..), TransitionSpec(..))
+import Sisyphus.Types
 import Sisyphus.Language.Template (defaultTemplateLoader, renderTemplate)
 
 
 gvTemplateSimple = "Graphviz/fsm.gv.tmpl"
 
 
-renderGvSimple :: RawStateMachine -> FilePath -> IO ()
-renderGvSimple rsm outFile = do
+renderGvSimple :: ValidatedStateMachine -> FilePath -> IO ()
+renderGvSimple vsm outFile = do
   gvTempl <- parseGingerFile defaultTemplateLoader gvTemplateSimple
   case gvTempl of
     Left err -> do
@@ -27,24 +27,26 @@ renderGvSimple rsm outFile = do
       exitWith (ExitFailure 2)
     Right gvTemplate -> do
       let
-        gvContext  = mkGvContext rsm
+        gvContext  = mkGvContext vsm
       renderTemplate gvContext gvTemplate outFile
 
 
 gvTransition :: TransitionSpec -> T.Text
 gvTransition (TSpec src dst maybeEvent gs rs) =
-  T.pack $ src ++ " -> " ++ dst ++ " [ label = \"" ++ transition_text ++ "\" ]"
+  T.pack $ sName ++ " -> " ++ dName ++ " [ label = \"" ++ transition_text ++ "\" ]"
   where
+    sName = stName src
+    dName = stName dst
     transition_text = trigger_name ++ "/ " ++ guard_text ++ reaction_text
     trigger_name = maybe "" (++ " ") maybeEvent
     guard_text = "" -- TODO once guards are supported
     reaction_text = foldr (\r acc -> (show r) ++ " " ++ acc) "" rs
 
 
-mkGvContext rsm = makeContextText contextLookup
+mkGvContext vsm = makeContextText contextLookup
   where
     contextLookup key = (M.!) contextMap key
     contextMap = M.fromList [("FSM_NAME", toGVal fsm_name)
                             ,("FSM_GV_TRANSITIONS",toGVal transitions)]
-    fsm_name = T.pack $ rsmName rsm
-    transitions = map gvTransition (rsmTransitions rsm)
+    fsm_name = T.pack $ vsmName vsm
+    transitions = map gvTransition (vsmTransitions vsm)
