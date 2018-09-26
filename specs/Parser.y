@@ -1,6 +1,9 @@
 {
 module Sisyphus.Parser (parse) where
 
+import qualified Data.Map.Strict as M
+import Control.Arrow ((&&&))
+
 import Sisyphus.Types
 import Sisyphus.Lexer
 }
@@ -33,7 +36,7 @@ import Sisyphus.Lexer
 
 %%
 
-sisyphus : name events actions states transitions { RSM $1 $2 $3 $4 $5 }
+sisyphus : name events actions states transitions { SM $1 $2 $3 $4 $5 }
 
 name : NAME ID     { $2 }
      | {- empty -} { "FSM" }
@@ -48,7 +51,7 @@ action_specifiers : action_specifier                   { [$1] }
                   | action_specifiers action_specifier { $2 : $1 }
 action_specifier : ID ';'                              { $1 }
 
-states : STATES state_specifiers                    { reverse $2 }
+states : STATES state_specifiers                    { M.fromList $ map (stName &&& id) $2 }
 state_specifiers : state_specifier                  { [$1] }
                  | state_specifiers state_specifier { $2 : $1 }
 state_specifier : ID state_attribute_list           { mkState $1 $2 }
@@ -89,7 +92,7 @@ mkState name attrs =
     allExits = map ((RSpec Nothing []) . snd) exits
     allInternals = map mkInternal internals
   in
-    RawState name allEntries allExits allInternals
+    State name allEntries allExits allInternals [] []
 
 mkInternal (ReactInternal trigger, reactions) = RSpec (Just trigger) [] reactions
 mkInternal _ = error "Not supported"
@@ -104,13 +107,13 @@ the same for the next transition definition. This function expands them so that
 each of them can exist as stand alone transitions, without the need of the
 context of the previous definitions.
 -}
-expandTransitions :: [(Maybe String, Maybe String, Maybe Event, [Guard], [Reaction])] -> [RawTransitionSpec]
+expandTransitions :: [(Maybe String, Maybe String, Maybe Event, [Guard], [Reaction])] -> [TransitionSpec]
 expandTransitions ts = go Nothing Nothing ts
   where
     go _ _ [] = []
-    go _ _ ts@(t@(Just src,Just dst,Just trigg,gs,rs):ts') = (RawTSpec src dst (Just trigg) gs rs) : go (Just src) (Just dst) ts'
-    go (Just src) _ ts@(t@(Nothing,Just dst,Just trigg,gs,rs):ts') = (RawTSpec src dst (Just trigg) gs rs) : go (Just src) (Just dst) ts'
-    go (Just src) (Just dst) ts@(t@(Nothing,Nothing,Just trigg,gs,rs):ts') = (RawTSpec src dst (Just trigg) gs rs) : go (Just src) (Just dst) ts'
+    go _ _ ts@(t@(Just src,Just dst,Just trigg,gs,rs):ts') = (TSpec src dst (Just trigg) gs rs) : go (Just src) (Just dst) ts'
+    go (Just src) _ ts@(t@(Nothing,Just dst,Just trigg,gs,rs):ts') = (TSpec src dst (Just trigg) gs rs) : go (Just src) (Just dst) ts'
+    go (Just src) (Just dst) ts@(t@(Nothing,Nothing,Just trigg,gs,rs):ts') = (TSpec src dst (Just trigg) gs rs) : go (Just src) (Just dst) ts'
     go _ _ _ = error "Invalid transition definition!"
 
 

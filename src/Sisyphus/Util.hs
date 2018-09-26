@@ -36,11 +36,15 @@ space :: String -> String
 space = char ' '
 
 addIngoingTransition :: TransitionSpec -> State -> State
-addIngoingTransition t s = let ins = stIngoing s
-                               s' = s{stIngoing=(t:ins)}
-                           in s'
+addIngoingTransition t s =
+  let
+    ins = stIngoingTransitions s
+    s' = s{stIngoingTransitions=(t:ins)}
+  in s'
 
 addOutgoingTransition :: TransitionSpec -> State -> State
-addOutgoingTransition t s = let outs = stOutgoing s
-                                s' = s{stOutgoing=(t:outs)}
-                            in s'
+addOutgoingTransition t s =
+  let
+    outs = stOutgoingTransitions s
+    s' = s{stOutgoingTransitions=(t:outs)}
+  in s'

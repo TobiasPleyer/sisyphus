@@ -1,4 +1,4 @@
-module Sisyphus.Language
+module Sisyphus.Targets
 ( supportedTargets
 )where
 

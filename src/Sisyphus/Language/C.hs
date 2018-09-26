@@ -19,8 +19,8 @@ cTemplateHeaderSimple = "C/fsm.h.tmpl"
 cTemplateSourceSimple = "C/fsm.c.tmpl"
 
 
-renderCSimple :: ValidatedStateMachine -> FilePath -> IO ()
-renderCSimple vsm outFile = do
+renderCSimple :: StateMachine -> FilePath -> IO ()
+renderCSimple sm outFile = do
   cHeaderTempl <- parseGingerFile defaultTemplateLoader cTemplateHeaderSimple
   case cHeaderTempl of
     Left err -> do
@@ -28,18 +28,18 @@ renderCSimple vsm outFile = do
       exitWith (ExitFailure 2)
     Right cHeaderTemplate -> do
       let
-        cContext  = mkCContext vsm
+        cContext  = mkCContext sm
       renderTemplate cContext cHeaderTemplate outFile
 
 
-mkCContext vsm = makeContextText contextLookup
+mkCContext sm = makeContextText contextLookup
   where
     contextLookup key = (M.!) contextMap key
     contextMap = M.fromList [("FSM_NAME", toGVal fsm_name)
                             ,("FSM_EVENTS", toGVal fsm_events)
                             ,("FSM_STATES", toGVal fsm_states)
                             ,("FSM_ACTIONS", toGVal fsm_actions)]
-    fsm_name = T.pack $ vsmName vsm
-    fsm_events = map T.pack $ vsmEvents vsm
-    fsm_states = map (T.pack . stName) $ vsmStates vsm
-    fsm_actions = map T.pack $ vsmActions vsm
+    fsm_name = T.pack $ smName sm
+    fsm_events = map T.pack $ smEvents sm
+    fsm_states = map T.pack $ M.keys (smStates sm)
+    fsm_actions = map T.pack $ smActions sm

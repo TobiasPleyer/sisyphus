@@ -1,6 +1,11 @@
 module Sisyphus.Types where
 
 
+import qualified Data.Map.Strict as M
+import qualified Data.IntMap.Strict as IM
+import qualified Data.Set as S
+
+
 data StateMachineError = SmUnknownEventError String
                        | SmUnknownActionError String
                        | SmUnknownStateError String
@@ -14,47 +19,41 @@ instance Show StateMachineError where
   show (SmUnknownStateError s) = "State " ++ s ++ " is not defined in the grammar file!"
   show (SmAmbiguityError s e) = "Ambiguous transition rules for state " ++ (stName s) ++ " for event " ++ e ++ "!"
   show (SmNoTriggerError (Left s)) = "State " ++ (stName s) ++ " has an internal reaction without trigger!"
-  show (SmNoTriggerError (Right t)) = "Transition from state " ++ (stName (tspecSrc t)) ++ " to state " ++ (stName (tspecDst t)) ++ " without trigger!"
+  show (SmNoTriggerError (Right t)) = "Transition from state " ++ (tspecSrc t) ++ " to state " ++ (tspecDst t) ++ " without trigger!"
   show (SmCustomError s) = s
 
   showsPrec _ _ = id
 
-data RawStateMachine = RSM
-  { rsmName        :: String
-  , rsmEvents      :: [Event]
-  , rsmActions     :: [Action]
-  , rsmStates      :: [RawState]
-  , rsmTransitions :: [RawTransitionSpec]
+data StateMachine = SM
+  { smName        :: String
+  , smEvents      :: [Event]
+  , smActions     :: [Action]
+  , smStates      :: M.Map String State
+  , smTransitions :: [TransitionSpec]
   } deriving (Show)
 
-data ValidatedStateMachine = VSM { vsmName        :: String
-                                 , vsmEvents      :: [Event]
-                                 , vsmActions     :: [Action]
-                                 , vsmStates      :: [State]
-                                 , vsmTransitions :: [TransitionSpec]
-                                 }
-                           | BadGrammar
-                           deriving (Show)
+data GrammarSummary = GS
+  { stateMachine :: StateMachine
+  , eventsUnused :: S.Set Event
+  , actionsUnused :: S.Set Action
+  , statesUnreachable :: S.Set State
+  , statesUnleavableNoFinal :: S.Set State
+  , warnings :: [String]
+  , errors :: [String]
+  }
 
 type Event  = String
 type Action = String
 type Guard  = String
 type TFuncSpec = [Reaction]
 
-data RawState = RawState
-  { rstName              :: String
-  , rstEntryReactions    :: [ReactionSpec]
-  , rstExitReactions     :: [ReactionSpec]
-  , rstInternalReactions :: [ReactionSpec]
-  } deriving (Show)
-
 data State = State
-  { stName              :: String
-  , stEntryReactions    :: [ReactionSpec]
-  , stExitReactions     :: [ReactionSpec]
-  , stInternalReactions :: [ReactionSpec]
-  , stIngoing           :: [TransitionSpec]
-  , stOutgoing          :: [TransitionSpec]
+  { stName                :: String
+  , stEntryReactions      :: [ReactionSpec]
+  , stExitReactions       :: [ReactionSpec]
+  , stInternalReactions   :: [ReactionSpec]
+  , stIngoingTransitions  :: [TransitionSpec]
+  , stOutgoingTransitions :: [TransitionSpec]
   } deriving (Show)
 
 data ReactionSpec = RSpec
@@ -63,17 +62,9 @@ data ReactionSpec = RSpec
   , rspecReactions :: [Reaction]
   } deriving (Show)
 
-data RawTransitionSpec = RawTSpec
-  { rtspecSrc       :: String
-  , rtspecDst       :: String
-  , rtspecTrigger   :: Maybe Event
-  , rtspecGuards    :: [Guard]
-  , rtspecReactions :: [Reaction]
-  } deriving (Show)
-
 data TransitionSpec = TSpec
-  { tspecSrc       :: State
-  , tspecDst       :: State
+  { tspecSrc       :: String
+  , tspecDst       :: String
   , tspecTrigger   :: Maybe Event
   , tspecGuards    :: [Guard]
   , tspecReactions :: [Reaction]

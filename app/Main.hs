@@ -5,7 +5,7 @@ import System.Exit (ExitCode(..), exitWith)
 import Sisyphus.Lexer (tokenize)
 import Sisyphus.Parser (parse)
 import Sisyphus.Types
-import Sisyphus.Language (supportedTargets)
+import Sisyphus.Targets (supportedTargets)
 
 
 tryRenderTarget target vsm outFile = do
@@ -23,8 +23,6 @@ tryRenderTarget target vsm outFile = do
 main :: IO ()
 main = do
   sgf <- getContents
-  let rsm = parse $ tokenize sgf
-      fsm_name = rsmName rsm
-  --tryRenderTarget "Graphviz_Simple" rsm ("tmp/" ++ fsm_name ++ ".gv")
-  --tryRenderTarget "C_Simple" rsm ("tmp/" ++ fsm_name ++ ".h")
+  let sm = parse $ tokenize sgf
+  tryRenderTarget "Graphviz_Simple" sm ("tmp/" ++ (smName sm) ++ ".gv")
   print "Done"

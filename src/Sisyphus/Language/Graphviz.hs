@@ -18,8 +18,8 @@ import Sisyphus.Language.Template (defaultTemplateLoader, renderTemplate)
 gvTemplateSimple = "Graphviz/fsm.gv.tmpl"
 
 
-renderGvSimple :: ValidatedStateMachine -> FilePath -> IO ()
-renderGvSimple vsm outFile = do
+renderGvSimple :: StateMachine -> FilePath -> IO ()
+renderGvSimple sm outFile = do
   gvTempl <- parseGingerFile defaultTemplateLoader gvTemplateSimple
   case gvTempl of
     Left err -> do
@@ -27,26 +27,24 @@ renderGvSimple vsm outFile = do
       exitWith (ExitFailure 2)
     Right gvTemplate -> do
       let
-        gvContext  = mkGvContext vsm
+        gvContext  = mkGvContext sm
       renderTemplate gvContext gvTemplate outFile
 
 
 gvTransition :: TransitionSpec -> T.Text
 gvTransition (TSpec src dst maybeEvent gs rs) =
-  T.pack $ sName ++ " -> " ++ dName ++ " [ label = \"" ++ transition_text ++ "\" ]"
+  T.pack $ src ++ " -> " ++ dst ++ " [ label = \"" ++ transition_text ++ "\" ]"
   where
-    sName = stName src
-    dName = stName dst
     transition_text = trigger_name ++ "/ " ++ guard_text ++ reaction_text
     trigger_name = maybe "" (++ " ") maybeEvent
     guard_text = "" -- TODO once guards are supported
     reaction_text = foldr (\r acc -> (show r) ++ " " ++ acc) "" rs
 
 
-mkGvContext vsm = makeContextText contextLookup
+mkGvContext sm = makeContextText contextLookup
   where
     contextLookup key = (M.!) contextMap key
     contextMap = M.fromList [("FSM_NAME", toGVal fsm_name)
                             ,("FSM_GV_TRANSITIONS",toGVal transitions)]
-    fsm_name = T.pack $ vsmName vsm
-    transitions = map gvTransition (vsmTransitions vsm)
+    fsm_name = T.pack $ smName sm
+    transitions = map gvTransition (smTransitions sm)
