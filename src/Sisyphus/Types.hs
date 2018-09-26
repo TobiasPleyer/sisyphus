@@ -34,10 +34,10 @@ data StateMachine = SM
 
 data GrammarSummary = GS
   { stateMachine :: StateMachine
-  , eventsUnused :: S.Set Event
-  , actionsUnused :: S.Set Action
-  , statesUnreachable :: S.Set State
-  , statesUnleavableNoFinal :: S.Set State
+  , unusedEvents :: S.Set Event
+  , unusedActions :: S.Set Action
+  , unreachableStates :: S.Set String
+  , unleavableStates :: S.Set String
   , warnings :: [String]
   , errors :: [String]
   }

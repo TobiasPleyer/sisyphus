@@ -22,4 +22,4 @@ tryRenderTarget target sm outFile = do
     Just renderFunc -> do
       putStrLn $ "Rendering target '" ++ target ++ "' to file " ++ outFile ++ "..."
       renderFunc sm outFile
-      putStrLn "Done"
+      putStrLn $ "...done rendering '" ++ target ++ "'"
