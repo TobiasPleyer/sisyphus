@@ -40,7 +40,7 @@ data GrammarSummary = GS
   , unleavableStates :: S.Set String
   , warnings :: [String]
   , errors :: [String]
-  }
+  } deriving (Show)
 
 type Event  = String
 type Action = String

@@ -4,6 +4,7 @@ module Sisyphus.Compile where
 
 
 import Control.Monad (forM_)
+import Data.List ((\\))
 import qualified Control.Monad.Trans.State.Lazy as TSL
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
@@ -12,7 +13,7 @@ import Sisyphus.Util (addIngoingTransition, addOutgoingTransition)
 
 
 runChecks :: StateMachine -> GrammarSummary
-runChecks sm@SM{..} = TSL.execState (dedupe >> checkTransitions) initialSummary
+runChecks sm@SM{..} = TSL.execState (dedupe >> checkTransitions >> checkRest) initialSummary
   where
     initialSummary = GS sm eventSet actionSet stateSet stateSet [] []
     eventSet = S.fromList smEvents
@@ -28,25 +29,33 @@ dedupe = do
   dedupeStates
 
 
-dedupeEvents = do
-  eventList <- getEvents
-  eventSet <- getUnusedEvents
-  dedupeListWithSet "event" eventList eventSet
+dedupeEvents = getEvents >>= dedupeList "Event"
+dedupeActions = getActions >>= dedupeList "Action"
+dedupeStates = getStateNames >>= dedupeList "State"
 
 
-dedupeActions = do
-  actionList <- getActions
-  actionSet <- getUnusedActions
-  dedupeListWithSet "action" actionList actionSet
+dedupeList :: String -> [String] -> TSL.State GrammarSummary ()
+dedupeList name items = do
+  let uniques = S.toList $ S.fromList items
+      redefs = items \\ uniques
+  forM_ redefs $ \redef -> addWarning (name ++ " '" ++ redef ++ "' has already been defined")
 
 
-dedupeStates = do
-  stateList <- getStateNames
-  let stateSet = S.fromList $ stateList
-  dedupeListWithSet "state" stateList stateSet
+checkRest :: TSL.State GrammarSummary ()
+checkRest = do
+  checkUnusedEvents
+  checkUnusedActions
+  checkUnreachableStates
+  checkUnleavableStates
 
 
-dedupeListWithSet = undefined
+checkUnusedEvents = getUnusedEvents >>= report "Event" "unused"
+checkUnusedActions = getUnusedActions >>= report "Action" "unused"
+checkUnreachableStates = getUnreachableStates >>= report "State" "unreachable by any transition"
+checkUnleavableStates = getUnleavableStates >>= report "State" "unleavable, but not a final state"
+
+
+report name issue items = forM_ items $ \item -> addWarning (name ++ " '" ++ item ++ "' is " ++ issue)
 
 
 checkTransition :: TransitionSpec -> TSL.State GrammarSummary ()
@@ -103,7 +112,7 @@ transitionEvents t@(TSpec src dst trigger guards reactions) =
     getEvent (EventEmit e) = e
 
 
-transitionActions :: TransitionSpec -> [Event]
+transitionActions :: TransitionSpec -> [Action]
 transitionActions t@(TSpec src dst trigger guards reactions) = as
   where
     as = map getAction $ filter isActionCall reactions
