@@ -82,7 +82,7 @@ isEventEmit _             = False
 instance Show Reaction where
   show (ActionCall a) = a ++ "()"
   show (EventEmit e) = '^' : e
-  showsPrec _ _ = id
+  showsPrec _ r = \s -> (show r) ++ s
 
 data ReactionClassifier = ReactEntry
                         | ReactExit
