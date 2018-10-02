@@ -12,7 +12,7 @@ $alpha    = [$upper $lower]
 $alphanum = [$alpha $digit]
 $idchar   = [$alphanum \_]
 
-$special  = [\.\:\;\,\$\@\|\*\+\?\~\-\{\}\(\)\[\]\/]
+$special  = [\^\.\:\;\,\$\@\|\*\+\?\~\-\{\}\(\)\[\]\/]
 
 @id       = $alpha $idchar*
 @comment  = "#".*
@@ -28,6 +28,9 @@ tokens :-
   \% "actions"               { \s -> ActionsT }
   \% "states"                { \s -> StatesT }
   \% "transitions"           { \s -> TransitionsT }
+  "entry" \:                 { \s -> EntryT }
+  "exit" \:                  { \s -> ExitT }
+  "internal" \:              { \s -> InternalT }
   @id                        { \s -> IdT s }
 
 {
@@ -40,6 +43,9 @@ data Token
   | ActionsT
   | StatesT
   | TransitionsT
+  | EntryT
+  | ExitT
+  | InternalT
   | IdT String
   | EOFT
   deriving Show

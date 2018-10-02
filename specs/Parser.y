@@ -14,7 +14,6 @@ import Sisyphus.Lexer
 %error { parseError }
 
 %token
-    ':'          { SpecialT ':'   }
     ';'          { SpecialT ';'   }
     ','          { SpecialT ','   }
     '|'          { SpecialT '|'   }
@@ -29,9 +28,9 @@ import Sisyphus.Lexer
     ACTIONS      { ActionsT       }
     STATES       { StatesT        }
     TRANSITIONS  { TransitionsT   }
-    entryID      { IdT "entry"    }
-    exitID       { IdT "exit"     }
-    internalID   { IdT "internal" }
+    ENTRY        { EntryT         }
+    EXIT         { ExitT          }
+    INTERNAL     { InternalT      }
     ID           { IdT $$         }
 
 %%
@@ -61,9 +60,9 @@ state_attribute_list : ';'                              { [] }
 state_attributes : {- empty -}                          { [] }
                  | state_attribute                      { [$1] }
                  | state_attributes ',' state_attribute { $3 : $1 }
-state_attribute : entryID ':' reactions                 { (ReactEntry,$3) }
-                | exitID ':' reactions                  { (ReactExit,$3) }
-                | internalID ':' ID '/' reactions       { (ReactInternal $3,$5)}
+state_attribute : ENTRY reactions                       { (ReactEntry,$2) }
+                | EXIT reactions                        { (ReactExit,$2) }
+                | INTERNAL ID '/' reactions             { (ReactInternal $2,$4)}
 
 reactions : reaction           { [$1] }
           | reactions reaction { $2 : $1 }
