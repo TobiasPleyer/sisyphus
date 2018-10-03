@@ -14,13 +14,11 @@ import Sisyphus.Util (addIngoingTransition, addOutgoingTransition)
 
 
 runChecks :: StateMachine -> GrammarSummary
-runChecks sm@SM{..} = TSL.execState
-  (do
-   checkDuplicates
-   checkStates $ M.elems smStates
-   checkTransitions smTransitions
-   checkFinal
-  ) initialSummary
+runChecks sm@SM{..} = flip TSL.execState initialSummary $ do
+    checkDuplicates
+    checkStates smStates
+    checkTransitions smTransitions
+    checkFinal
   where
     initialSummary = GS sm eventSet actionSet stateSet stateSet [] []
     eventSet = S.fromList smEvents
@@ -67,7 +65,6 @@ reportMany name issue = mapM_ $ report name issue
 
 
 checkStates = mapM_ checkState
-checkTransitions = mapM_ checkTransition
 
 
 checkState :: State -> SummaryM ()
@@ -86,6 +83,9 @@ checkState s@(State name entries exits internals ingoings outgoings) = do
   actions <- getActions
   let unknownActions = filter (flip notElem actions) (concat [exitActions, entryActions, internalActions])
   reportMany "Action" "undefined - adding default" unknownActions
+
+
+checkTransitions = mapM_ checkTransition
 
 
 checkTransition :: TransitionSpec -> SummaryM ()
