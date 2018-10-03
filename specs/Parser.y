@@ -40,17 +40,20 @@ sisyphus : name events actions states transitions { SM $1 $2 $3 $4 $5 }
 name : NAME ID     { $2 }
      | {- empty -} { "FSM" }
 
-events : EVENTS event_specifiers                    { reverse $2 }
+events : {- empty -}                                { [] }
+       | EVENTS event_specifiers                    { reverse $2 }
 event_specifiers : event_specifier                  { [$1] }
                  | event_specifiers event_specifier { $2 : $1 }
 event_specifier : ID ';'                            { $1 }
 
-actions : ACTIONS action_specifiers                    { reverse $2 }
+actions : {- empty -}                                  { [] }
+        | ACTIONS action_specifiers                    { reverse $2 }
 action_specifiers : action_specifier                   { [$1] }
                   | action_specifiers action_specifier { $2 : $1 }
 action_specifier : ID ';'                              { $1 }
 
-states : STATES state_specifiers                    { M.fromList $ map (stName &&& id) $2 }
+states : {- empty -}                                { M.empty }
+       | STATES state_specifiers                    { M.fromList $ map (stName &&& id) $2 }
 state_specifiers : state_specifier                  { [$1] }
                  | state_specifiers state_specifier { $2 : $1 }
 state_specifier : ID state_attribute_list           { mkState $1 $2 }

@@ -3,7 +3,8 @@
 module Sisyphus.Compile where
 
 
-import Control.Monad (forM_)
+import Control.Monad (forM_, mapM_)
+import Data.Foldable (traverse_)
 import Data.List ((\\))
 import qualified Control.Monad.Trans.State.Lazy as TSL
 import qualified Data.Map.Strict as M
@@ -13,81 +14,99 @@ import Sisyphus.Util (addIngoingTransition, addOutgoingTransition)
 
 
 runChecks :: StateMachine -> GrammarSummary
-runChecks sm@SM{..} = TSL.execState (dedupe >> checkTransitions >> checkRest) initialSummary
+runChecks sm@SM{..} = TSL.execState
+  (do
+   checkDuplicates
+   checkStates $ M.elems smStates
+   checkTransitions smTransitions
+   checkFinal
+  ) initialSummary
   where
     initialSummary = GS sm eventSet actionSet stateSet stateSet [] []
     eventSet = S.fromList smEvents
     actionSet = S.fromList smActions
     stateSet = S.fromList $ M.keys smStates
-    checkTransitions = forM_ smTransitions checkTransition
 
 
-dedupe :: TSL.State GrammarSummary ()
-dedupe = do
+type SummaryM a = TSL.State GrammarSummary a
+
+
+checkDuplicates :: SummaryM ()
+checkDuplicates = do
   dedupeEvents
   dedupeActions
-  dedupeStates
 
 
 dedupeEvents = getEvents >>= dedupeList "Event"
 dedupeActions = getActions >>= dedupeList "Action"
-dedupeStates = getStateNames >>= dedupeList "State"
 
 
-dedupeList :: String -> [String] -> TSL.State GrammarSummary ()
+dedupeList :: String -> [String] -> SummaryM ()
 dedupeList name items = do
   let uniques = S.toList $ S.fromList items
       redefs = items \\ uniques
   forM_ redefs $ \redef -> addWarning (name ++ " '" ++ redef ++ "' has already been defined")
 
 
-checkRest :: TSL.State GrammarSummary ()
-checkRest = do
+checkFinal :: SummaryM ()
+checkFinal = do
   checkUnusedEvents
   checkUnusedActions
   checkUnreachableStates
   checkUnleavableStates
 
 
-checkUnusedEvents = getUnusedEvents >>= report "Event" "unused"
-checkUnusedActions = getUnusedActions >>= report "Action" "unused"
-checkUnreachableStates = getUnreachableStates >>= report "State" "unreachable by any transition"
-checkUnleavableStates = getUnleavableStates >>= report "State" "unleavable, but not a final state"
+checkUnusedEvents = getUnusedEvents >>= reportMany "Event" "unused"
+checkUnusedActions = getUnusedActions >>= reportMany "Action" "unused"
+checkUnreachableStates = getUnreachableStates >>= reportMany "State" "unreachable by any transition"
+checkUnleavableStates = getUnleavableStates >>= reportMany "State" "unleavable, but not a final state"
 
 
-report name issue items = forM_ items $ \item -> addWarning (name ++ " '" ++ item ++ "' is " ++ issue)
+report name issue item = addWarning (name ++ " '" ++ item ++ "' is " ++ issue)
+reportMany name issue = mapM_ $ report name issue
 
 
-checkTransition :: TransitionSpec -> TSL.State GrammarSummary ()
+checkStates = mapM_ checkState
+checkTransitions = mapM_ checkTransition
+
+
+checkState :: State -> SummaryM ()
+checkState s@(State name entries exits internals ingoings outgoings) = do
+  let exitEvents = (concatMap reactionEvents exits)
+      entryEvents = (concatMap reactionEvents entries)
+      internalEvents = (concatMap reactionEvents internals)
+      exitActions = (concatMap reactionActions exits)
+      entryActions = (concatMap reactionActions entries)
+      internalActions = (concatMap reactionActions internals)
+  traverse_ markEventsUsed [entryEvents, exitEvents, internalEvents]
+  traverse_ markActionsUsed [entryActions, exitActions, internalActions]
+  events <- getEvents
+  let unknownEvents = filter (flip notElem events) (concat [exitEvents, entryEvents, internalEvents])
+  reportMany "Event" "undefined - adding default" unknownEvents
+  actions <- getActions
+  let unknownActions = filter (flip notElem actions) (concat [exitActions, entryActions, internalActions])
+  reportMany "Action" "undefined - adding default" unknownActions
+
+
+checkTransition :: TransitionSpec -> SummaryM ()
 checkTransition t@(TSpec src dst trig guards reactions) = do
   let
     transEvents = transitionEvents t
     transActions = transitionActions t
-  unuEvents <- getUnusedEvents
-  unuActions <- getUnusedActions
-  unrStates <- getUnreachableStates
-  unlStates <- getUnleavableStates
-  let
-    unuEvents' = foldr S.delete unuEvents transEvents
-    unuActions' = foldr S.delete unuActions transActions
-    unrStates' = S.delete dst unrStates
-    unlStates' = S.delete src unlStates
-  setUnusedEvents unuEvents'
-  setUnusedActions unuActions'
-  setUnreachableStates unrStates'
-  setUnleavableStates unlStates'
+  markEventsUsed transEvents
+  markActionsUsed transActions
+  markStateLeavable src
+  markStateReachable dst
   events <- getEvents
   let unknownEvents = filter (flip notElem events) transEvents
-  forM_ unknownEvents (\e -> addEvent e
-                          >> addWarning ("Event '" ++ e ++ "' is undefined - adding default."))
+  reportMany "Event" "undefined - adding default" unknownEvents
   actions <- getActions
   let unknownActions = filter (flip notElem actions) transActions
-  forM_ unknownActions (\a -> addAction a
-                           >> addWarning ("Action '" ++ a ++ "' is undefined - adding default."))
+  reportMany "Action" "undefined - adding default" unknownActions
   maybeSrcState <- getState src
   case maybeSrcState of
     Nothing -> do
-      addWarning ("State '" ++ src ++ "' is undefined - adding default.")
+      report "State" "undefined - adding default" src
       addState src (State src [] [] [] [] [t])
     Just (srcState) -> do
       let outgoings = stOutgoingTransitions srcState
@@ -95,11 +114,36 @@ checkTransition t@(TSpec src dst trig guards reactions) = do
   maybeDstState <- getState dst
   case maybeDstState of
     Nothing -> do
-      addWarning ("State '" ++ dst ++ "' is undefined - adding default.")
+      report "State" "undefined - adding default" dst
       addState dst (State dst [] [] [] [t] [])
     Just (dstState) -> do
       let ingoings = stIngoingTransitions dstState
       addState dst dstState{stIngoingTransitions=t:ingoings}
+
+
+allEvents :: [Reaction] -> [Event]
+allEvents reactions = map getEvent $ filter isEventEmit reactions
+  where
+    getEvent (EventEmit e) = e
+
+
+allActions :: [Reaction] -> [Action]
+allActions reactions = map getAction $ filter isActionCall reactions
+  where
+    getAction (ActionCall a) = a
+
+
+reactionEvents :: ReactionSpec -> [Event]
+reactionEvents r@(RSpec trigger guards reactions) =
+  case trigger of
+    Just e -> e:es
+    Nothing -> es
+  where
+    es = allEvents reactions
+
+
+reactionActions :: ReactionSpec -> [Action]
+reactionActions r@(RSpec trigger guards reactions) = allActions reactions
 
 
 transitionEvents :: TransitionSpec -> [Event]
@@ -108,131 +152,171 @@ transitionEvents t@(TSpec src dst trigger guards reactions) =
     Just e -> e:es
     Nothing -> es
   where
-    es = map getEvent $ filter isEventEmit reactions
-    getEvent (EventEmit e) = e
+    es = allEvents reactions
 
 
 transitionActions :: TransitionSpec -> [Action]
-transitionActions t@(TSpec src dst trigger guards reactions) = as
-  where
-    as = map getAction $ filter isActionCall reactions
-    getAction (ActionCall a) = a
+transitionActions t@(TSpec src dst trigger guards reactions) = allActions reactions
 
 -- The summary state monad and the required utility functions
 
-getStateMachine :: TSL.State GrammarSummary StateMachine
+getStateMachine :: SummaryM StateMachine
 getStateMachine = TSL.state (\gs -> (stateMachine gs, gs))
 
-setStateMachine :: StateMachine -> TSL.State GrammarSummary ()
+setStateMachine :: StateMachine -> SummaryM ()
 setStateMachine sm = TSL.state (\gs -> ((), gs{stateMachine=sm}))
 
 
-getName :: TSL.State GrammarSummary String
+getName :: SummaryM String
 getName = do
   sm <- getStateMachine
   return $ smName sm
 
 
-getEvents :: TSL.State GrammarSummary [Event]
+getEvents :: SummaryM [Event]
 getEvents = smEvents <$> getStateMachine
 
-setEvents :: [Event] -> TSL.State GrammarSummary ()
+setEvents :: [Event] -> SummaryM ()
 setEvents es = do
   sm <- getStateMachine
   setStateMachine $ sm{smEvents=es}
 
-addEvent :: Event -> TSL.State GrammarSummary ()
+addEvent :: Event -> SummaryM ()
 addEvent e = do
   es <- getEvents
   setEvents (e:es)
 
 
-getActions :: TSL.State GrammarSummary [Action]
+getActions :: SummaryM [Action]
 getActions = smActions <$> getStateMachine
 
-setActions :: [Action] -> TSL.State GrammarSummary ()
+setActions :: [Action] -> SummaryM ()
 setActions as = do
   sm <- getStateMachine
   setStateMachine $ sm{smActions=as}
 
-addAction :: Action -> TSL.State GrammarSummary ()
+addAction :: Action -> SummaryM ()
 addAction a = do
   as <- getActions
   setActions (a:as)
 
 
-getStateMap :: TSL.State GrammarSummary (M.Map String State)
+getStateMap :: SummaryM (M.Map String State)
 getStateMap = smStates <$> getStateMachine
 
-getStateNames :: TSL.State GrammarSummary [String]
+getStateNames :: SummaryM [String]
 getStateNames = (M.keys . smStates) <$> getStateMachine
 
-getState :: String -> TSL.State GrammarSummary (Maybe State)
+getState :: String -> SummaryM (Maybe State)
 getState s = (M.lookup s) <$> getStateMap
 
-setStateMap :: (M.Map String State) -> TSL.State GrammarSummary ()
+setStateMap :: (M.Map String State) -> SummaryM ()
 setStateMap ss = do
   sm <- getStateMachine
   setStateMachine $ sm{smStates=ss}
 
-addState :: String -> State -> TSL.State GrammarSummary ()
+addState :: String -> State -> SummaryM ()
 addState n s = do
   sm <- getStateMap
   setStateMap (M.insert n s sm)
 
 
-getTransitions :: TSL.State GrammarSummary [TransitionSpec]
+getTransitions :: SummaryM [TransitionSpec]
 getTransitions = smTransitions <$> getStateMachine
 
-setTransitions :: [TransitionSpec] -> TSL.State GrammarSummary ()
+setTransitions :: [TransitionSpec] -> SummaryM ()
 setTransitions ts = do
   sm <- getStateMachine
   setStateMachine $ sm{smTransitions=ts}
 
 
-getUnusedEvents :: TSL.State GrammarSummary (S.Set Event)
+getUnusedEvents :: SummaryM (S.Set Event)
 getUnusedEvents = TSL.state (\gs -> (unusedEvents gs, gs))
 
-setUnusedEvents :: (S.Set Event) -> TSL.State GrammarSummary ()
+setUnusedEvents :: (S.Set Event) -> SummaryM ()
 setUnusedEvents ues = TSL.state (\gs -> ((), gs{unusedEvents=ues}))
 
 
-getUnusedActions :: TSL.State GrammarSummary (S.Set Action)
+getUnusedActions :: SummaryM (S.Set Action)
 getUnusedActions = TSL.state (\gs -> (unusedActions gs, gs))
 
-setUnusedActions :: (S.Set Action) -> TSL.State GrammarSummary ()
+setUnusedActions :: (S.Set Action) -> SummaryM ()
 setUnusedActions uas = TSL.state (\gs -> ((), gs{unusedActions=uas}))
 
 
-getUnreachableStates :: TSL.State GrammarSummary (S.Set String)
+getUnreachableStates :: SummaryM (S.Set String)
 getUnreachableStates = TSL.state (\gs -> (unreachableStates gs, gs))
 
-setUnreachableStates :: (S.Set String) -> TSL.State GrammarSummary ()
+setUnreachableStates :: (S.Set String) -> SummaryM ()
 setUnreachableStates urs = TSL.state (\gs -> ((), gs{unreachableStates=urs}))
 
 
-getUnleavableStates :: TSL.State GrammarSummary (S.Set String)
+getUnleavableStates :: SummaryM (S.Set String)
 getUnleavableStates = TSL.state (\gs -> (unleavableStates gs, gs))
 
-setUnleavableStates :: (S.Set String) -> TSL.State GrammarSummary ()
+setUnleavableStates :: (S.Set String) -> SummaryM ()
 setUnleavableStates uls = TSL.state (\gs -> ((), gs{unleavableStates=uls}))
 
 
-getWarnings :: TSL.State GrammarSummary [String]
+getWarnings :: SummaryM [String]
 getWarnings = TSL.state (\gs -> (warnings gs, gs))
 
-setWarnings :: [String] -> TSL.State GrammarSummary ()
+setWarnings :: [String] -> SummaryM ()
 setWarnings ws = TSL.state (\gs -> ((), gs{warnings=ws}))
 
-addWarning :: String -> TSL.State GrammarSummary ()
+addWarning :: String -> SummaryM ()
 addWarning w = TSL.state (\gs -> ((), gs{warnings=w:(warnings gs)}))
 
 
-getErrors :: TSL.State GrammarSummary [String]
+getErrors :: SummaryM [String]
 getErrors = TSL.state (\gs -> (errors gs, gs))
 
-setErrors :: [String] -> TSL.State GrammarSummary ()
+setErrors :: [String] -> SummaryM ()
 setErrors es = TSL.state (\gs -> ((), gs{errors=es}))
 
-addError :: String -> TSL.State GrammarSummary ()
+addError :: String -> SummaryM ()
 addError e = TSL.state (\gs -> ((), gs{errors=e:(errors gs)}))
+
+
+markEventUsed :: Event -> SummaryM ()
+markEventUsed e = do
+  events <- getUnusedEvents
+  let events' = S.delete e events
+  setUnusedEvents events'
+
+
+markEventsUsed :: [Event] -> SummaryM ()
+markEventsUsed = mapM_ markEventUsed
+
+
+markActionUsed :: Action -> SummaryM ()
+markActionUsed a = do
+  actions <- getUnusedActions
+  let actions' = S.delete a actions
+  setUnusedActions actions'
+
+
+markActionsUsed :: [Action] -> SummaryM ()
+markActionsUsed = mapM_ markActionUsed
+
+
+markStateReachable :: String -> SummaryM ()
+markStateReachable s = do
+  states <- getUnreachableStates
+  let states' = S.delete s states
+  setUnreachableStates states'
+
+
+markStatesReachable :: [String] -> SummaryM ()
+markStatesReachable = mapM_ markStateReachable
+
+
+markStateLeavable :: String -> SummaryM ()
+markStateLeavable s = do
+  states <- getUnleavableStates
+  let states' = S.delete s states
+  setUnleavableStates states'
+
+
+markStatesLeavable :: [String] -> SummaryM ()
+markStatesLeavable = mapM_ markStateLeavable
