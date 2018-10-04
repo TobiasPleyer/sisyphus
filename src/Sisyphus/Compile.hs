@@ -26,7 +26,7 @@ runChecks sm@SM{..} = flip TSL.execState initialSummary $ do
     stateSet = S.fromList $ M.keys smStates
 
 
-type SummaryM a = TSL.State GrammarSummary a
+type SummaryM = TSL.State GrammarSummary
 
 
 checkDuplicates :: SummaryM ()
@@ -35,15 +35,24 @@ checkDuplicates = do
   dedupeActions
 
 
-dedupeEvents = getEvents >>= dedupeList "Event"
-dedupeActions = getActions >>= dedupeList "Action"
+dedupeEvents = do
+  events <- getEvents
+  uniques <- dedupeList "Event" events
+  setEvents uniques
 
 
-dedupeList :: String -> [String] -> SummaryM ()
+dedupeActions = do
+  actions <- getActions
+  uniques <- dedupeList "Action" actions
+  setActions uniques
+
+
+dedupeList :: String -> [String] -> SummaryM [String]
 dedupeList name items = do
   let uniques = S.toList $ S.fromList items
       redefs = items \\ uniques
   forM_ redefs $ \redef -> addWarning (name ++ " '" ++ redef ++ "' has already been defined")
+  return uniques
 
 
 checkFinal :: SummaryM ()

@@ -18,9 +18,11 @@ extra-source-files:
 description:         Simple finite state machine generator
 
 dependencies:
-- base >= 4.7 && < 5
 - array
+- base >= 4.7 && < 5
+- cmdargs
 - containers
+- filepath
 - ginger
 - text
 - transformers
