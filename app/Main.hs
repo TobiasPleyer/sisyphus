@@ -42,8 +42,6 @@ main = do
   opts <- cmdArgsRun options
   sgf <- readFile $ head $ files opts
   let statemachine = parse $ tokenize sgf
-  when (graphviz opts) $
-    tryRenderTarget "Graphviz_Simple" statemachine ("tmp/" ++ (smName statemachine) ++ ".gv")
   let summary = runChecks statemachine
   when (and [ not $ null $ warnings summary
             , not $ no_warnings opts
@@ -54,11 +52,14 @@ main = do
                  then
                    let errors' = (warnings summary) ++ (errors summary)
                    in summary{errors=errors'}
-                else summary
+                 else summary
   when (not $ null $ errors summary') $ do
     putStrLn "The following errors prevent further processing:"
     putStrLn "== Errors =="
     forM_ (errors summary') putStrLn
     exitFailure
+  when (graphviz opts) $ do
+    let gvPath = (outputdir opts) </> (smName statemachine) <.> "gv"
+    tryRenderTarget "Graphviz_Simple" statemachine gvPath
   print "Done"
   exitSuccess
