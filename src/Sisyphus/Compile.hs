@@ -89,9 +89,11 @@ checkState s@(State name entries exits internals ingoings outgoings) = do
   events <- getEvents
   let unknownEvents = filter (flip notElem events) (concat [exitEvents, entryEvents, internalEvents])
   reportMany "Event" "undefined - adding default" unknownEvents
+  forM_ unknownEvents addEvent
   actions <- getActions
   let unknownActions = filter (flip notElem actions) (concat [exitActions, entryActions, internalActions])
   reportMany "Action" "undefined - adding default" unknownActions
+  forM_ unknownActions addAction
 
 
 checkTransitions = mapM_ checkTransition
@@ -109,9 +111,11 @@ checkTransition t@(TSpec src dst trig guards reactions) = do
   events <- getEvents
   let unknownEvents = filter (flip notElem events) transEvents
   reportMany "Event" "undefined - adding default" unknownEvents
+  forM_ unknownEvents addEvent
   actions <- getActions
   let unknownActions = filter (flip notElem actions) transActions
   reportMany "Action" "undefined - adding default" unknownActions
+  forM_ unknownActions addAction
   maybeSrcState <- getState src
   case maybeSrcState of
     Nothing -> do
@@ -228,6 +232,9 @@ addState :: String -> State -> SummaryM ()
 addState n s = do
   sm <- getStateMap
   setStateMap (M.insert n s sm)
+
+addDefaultState :: String -> SummaryM ()
+addDefaultState n = addState n (State n [] [] [] [] [])
 
 
 getTransitions :: SummaryM [TransitionSpec]
