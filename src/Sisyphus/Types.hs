@@ -1,3 +1,5 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module Sisyphus.Types where
 
 
@@ -30,7 +32,16 @@ data StateMachine = SM
   , smActions     :: [Action]
   , smStates      :: M.Map String State
   , smTransitions :: [TransitionSpec]
-  } deriving (Show)
+  }
+
+instance Show StateMachine where
+  show SM{..} = (init . unlines) $ strName : (concat [strEvents, strActions, strStates])
+    where
+      strName = "Name: " ++ smName
+      strEvents = "Events" : (map ("  " ++) smEvents)
+      strActions = "Actions" : (map ("  " ++) smActions)
+      strStates = "States" : (map ((init . unlines) . map ("  " ++) . lines . show) (M.elems smStates))
+  showsPrec _ r s = (show r) ++ s
 
 data GrammarSummary = GS
   { stateMachine :: StateMachine
@@ -54,7 +65,17 @@ data State = State
   , stInternalReactions   :: [ReactionSpec]
   , stIngoingTransitions  :: [TransitionSpec]
   , stOutgoingTransitions :: [TransitionSpec]
-  } deriving (Show)
+  }
+
+instance Show State where
+  show State{..} = (init . unlines) $ stName : (concat [strEntries, strExits, strInternals, strIngoings, strOutgoings])
+    where
+      strEntries = map (("  entry: " ++) . show) stEntryReactions
+      strExits = map (("  exit: " ++) . show) stExitReactions
+      strInternals = map (("  internal: " ++) . show) stInternalReactions
+      strIngoings = map (("  in: " ++) . show) stIngoingTransitions
+      strOutgoings = map (("  out: " ++) . show) stOutgoingTransitions
+  showsPrec _ r s = (show r) ++ s
 
 data ReactionSpec = RSpec
   { rspecTrigger   :: Maybe Event

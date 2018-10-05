@@ -18,6 +18,7 @@ data Options = Options
   { no_warnings :: Bool
   , warn_is_error :: Bool
   , graphviz :: Bool
+  , print_statemachine :: Bool
   , outputdir :: FilePath
   , input_format :: String
   , target :: String
@@ -27,9 +28,10 @@ data Options = Options
 
 options :: Mode (CmdArgs Options)
 options = cmdArgsMode $ Options
-  { no_warnings   = False                 &= name "W" &= help "Don't print warnings"
-  , warn_is_error = False                 &= name "E" &= help "Warnings are treated as errors"
-  , graphviz      = False                 &= name "G" &= help "Generate a Graphviz file of the FSM"
+  { no_warnings        = False            &= name "W" &= help "Don't print warnings"
+  , warn_is_error      = False            &= name "E" &= help "Warnings are treated as errors"
+  , graphviz           = False            &= name "G" &= help "Generate a Graphviz file of the FSM"
+  , print_statemachine = False            &= name "p" &= help "Print the parsed state machine"
   , outputdir     = "."   &= typDir       &= name "d" &= help "Output will go in this directory"
   , input_format  = "sgf" &= typ "INPUT"  &= name "i" &= help "The input file format"
   , target        = ""    &= typ "TARGET" &= name "t" &= help "The target language of the generated FSM"
@@ -41,25 +43,30 @@ main :: IO ()
 main = do
   opts <- cmdArgsRun options
   sgf <- readFile $ head $ files opts
-  let statemachine = parse $ tokenize sgf
-  let summary = runChecks statemachine
-  when (and [ not $ null $ warnings summary
+  let sm = parse $ tokenize sgf
+  let smry = runChecks sm
+  when (and [ not $ null $ warnings smry
             , not $ no_warnings opts
             , not $ warn_is_error opts]) $ do
     putStrLn "== Warnings =="
-    forM_ (warnings summary) putStrLn
-  let summary' = if (warn_is_error opts)
+    forM_ (warnings smry) putStrLn
+  -- This is the final summary after the command line flags have been evaluated
+  let summary = if (warn_is_error opts)
                  then
-                   let errors' = (warnings summary) ++ (errors summary)
-                   in summary{errors=errors'}
-                 else summary
-  when (not $ null $ errors summary') $ do
+                   let errors' = (warnings smry) ++ (errors smry)
+                   in smry{errors=errors'}
+                 else smry
+  when (not $ null $ errors summary) $ do
     putStrLn "The following errors prevent further processing:"
     putStrLn "== Errors =="
-    forM_ (errors summary') putStrLn
+    forM_ (errors summary) putStrLn
     exitFailure
+  -- This is the state machine after the checks have been run
+  let statemachine = stateMachine summary
   when (graphviz opts) $ do
-    let gvPath = (outputdir opts) </> (smName statemachine) <.> "gv"
+    let gvPath = (outputdir opts) </> (smName sm) <.> "gv"
     tryRenderTarget "Graphviz_Simple" statemachine gvPath
+  when (print_statemachine opts) $
+    print statemachine
   print "Done"
   exitSuccess
