@@ -1,0 +1,76 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include "{{ FSM_NAME }}.h"
+
+
+static void {{ FSM_NAME }}_AddSignal({{ FSM_NAME }}_t*, {{ FSM_NAME }}_event_t);
+
+
+{{ FSM_NAME }}_t* void {{ FSM_NAME }}_New(void)
+{
+    {{ FSM_NAME }}_t* pSM = ({{ FSM_NAME }}_t*) malloc(sizeof({{ FSM_NAME }}_t));
+    pSM->current_state = {{ FSM_NAME }}__UNDEFINED;
+    pSM->transition_table = {{ FSM_NAME }}_transition_table;
+    pSM->event_queue_start_index = 0;
+    pSM->event_queue_end_index = 0;
+    pSM->signal_queue_start_index = 0;
+    pSM->signal_queue_end_index = 0;
+    int i = 0;
+    for (i=0; i<EVENT_QUEUE_SIZE; i++)
+    {
+        pSM->event_queue[i] = {{ FSM_NAME }}_NO_EVENT;
+    }
+    for (i=0; i<SIGNAL_QUEUE_SIZE; i++)
+    {
+        pSM->signal_queue[i] = {{ FSM_NAME }}_NO_EVENT;
+    }
+    return pSM;
+}
+
+void {{ FSM_NAME }}_Start({{ FSM_NAME }}_t* pSM)
+{
+    pSM->current_state = {{ FSM_NAME }}_{{ FSM_START_STATE }};
+    // TODO
+}
+
+void {{ FSM_NAME }}_Deduct({{ FSM_NAME }}_t* pSM)
+{
+    while (pSM->event_queue[pSM->event_queue_start_index] != {{ FSM_NAME }}_NO_EVENT)
+    {
+        {{ FSM_NAME }}_event_t current_event = pSM->event_queue[pSM->event_queue_start_index++];
+        transition_function_t* transition_func = pSM->transition_table[pSM->current_state][current_event];
+        (*transition_func)(pSM);
+        while (pSM->signal_queue[pSM->signal_queue_start_index] != {{ FSM_NAME }}_NO_EVENT)
+        {
+            {{ FSM_NAME }}_event_t current_event = pSM->event_queue[pSM->signal_queue_start_index++];
+            transition_function_t* transition_func = pSM->transition_table[pSM->current_state][current_event];
+            (*transition_func)(pSM);
+        }
+    }
+}
+
+void {{ FSM_NAME }}_AddEvent({{ FSM_NAME }}_t* pSM, {{ FSM_NAME }}_event_t ev)
+{
+    if (pSM->event_queue[pSM->event_queue_end_index] != {{ FSM_NAME }}_NO_EVENT)
+    {
+        fprintf(stderr, "Event queue full!");
+        exit(1);
+    }
+    else
+    {
+        pSM->event_queue[pSM->event_queue_end_index++] = ev;
+    }
+}
+
+static void {{ FSM_NAME }}_AddSignal({{ FSM_NAME }}_t* pSM, {{ FSM_NAME }}_event_t signal)
+{
+    if (pSM->signal_queue[pSM->signal_queue_end_index] != {{ FSM_NAME }}_NO_EVENT)
+    {
+        fprintf(stderr, "Signal queue full!");
+        exit(1);
+    }
+    else
+    {
+        pSM->signal_queue[pSM->signal_queue_end_index++] = signal;
+    }
+}

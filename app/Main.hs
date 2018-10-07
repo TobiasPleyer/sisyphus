@@ -11,17 +11,16 @@ import Sisyphus.Lexer (tokenize)
 import Sisyphus.Parser (parse)
 import Sisyphus.Types
 import Sisyphus.Compile
-import Sisyphus.Targets (supportedTargets, tryRenderTarget)
+import Sisyphus.Targets (supportedTargets, renderTarget)
 
 
 data Options = Options
   { no_warnings :: Bool
   , warn_is_error :: Bool
-  , graphviz :: Bool
   , print_statemachine :: Bool
   , outputdir :: FilePath
   , input_format :: String
-  , target :: String
+  , targets :: [String]
   , files :: [FilePath]
   } deriving (Data,Typeable,Show)
 
@@ -30,11 +29,10 @@ options :: Mode (CmdArgs Options)
 options = cmdArgsMode $ Options
   { no_warnings        = False            &= name "W" &= help "Don't print warnings"
   , warn_is_error      = False            &= name "E" &= help "Warnings are treated as errors"
-  , graphviz           = False            &= name "G" &= help "Generate a Graphviz file of the FSM"
   , print_statemachine = False            &= name "p" &= help "Print the parsed state machine"
   , outputdir     = "."   &= typDir       &= name "d" &= help "Output will go in this directory"
   , input_format  = "sgf" &= typ "INPUT"  &= name "i" &= help "The input file format"
-  , target        = ""    &= typ "TARGET" &= name "t" &= help "The target language of the generated FSM"
+  , targets       = []    &= typ "TARGET" &= name "t" &= help "The target language of the generated FSM"
   , files         = []    &= typ "PATH"   &= args
   } &= program "fsmg" &= summary "Sisyphus - Finite state machine generator v0.1beta"
 
@@ -63,9 +61,7 @@ main = do
     exitFailure
   -- This is the state machine after the checks have been run
   let statemachine = stateMachine summary
-  when (graphviz opts) $ do
-    let gvPath = (outputdir opts) </> (smName sm) <.> "gv"
-    tryRenderTarget "Graphviz_Simple" statemachine gvPath
+  forM_ (targets opts) $ renderTarget statemachine (outputdir opts)
   when (print_statemachine opts) $
     print statemachine
   print "Done"

@@ -5,21 +5,19 @@ where
 
 import System.Exit (ExitCode(..), exitWith)
 import qualified Data.Map.Strict as M
-import Sisyphus.Language.Graphviz (renderGvSimple)
-import Sisyphus.Language.C (renderCSimple)
+import Sisyphus.Language.Graphviz
+import Sisyphus.Language.C
 
 
-supportedTargets = M.fromList [ ("Graphviz_Simple", renderGvSimple)
-                              , ("C_Simple", renderCSimple)]
+supportedTargets = M.fromList [ ("Graphviz", renderGraphviz)
+                              , ("C::Simple", renderCSimple)]
 
 
-tryRenderTarget target sm outFile = do
+renderTarget sm outDir target = do
   let maybeRenderFunc = M.lookup target supportedTargets
   case maybeRenderFunc of
-    Nothing -> do
-      putStrLn $ "Target '" ++ target ++ "' is not supported!"
-      exitWith (ExitFailure 1)
+    Nothing -> putStrLn $ "Target '" ++ target ++ "' is not supported!"
     Just renderFunc -> do
-      putStrLn $ "Rendering target '" ++ target ++ "' to file " ++ outFile ++ "..."
-      renderFunc sm outFile
+      putStrLn $ "Rendering target '" ++ target
+      renderFunc sm outDir
       putStrLn $ "...done rendering '" ++ target ++ "'"

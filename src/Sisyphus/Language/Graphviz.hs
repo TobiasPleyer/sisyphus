@@ -1,12 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Sisyphus.Language.Graphviz
-( renderGvSimple
-) where
+
+where
 
 
 import qualified Data.Map.Strict as M
 import qualified Data.Text as T
+import System.FilePath
 import System.Exit (ExitCode(..), exitWith)
 import Text.Ginger
        (makeContextText, Template, toGVal, runGinger, parseGingerFile, VarName)
@@ -18,8 +19,9 @@ import Sisyphus.Language.Template (defaultTemplateLoader, renderTemplate)
 gvTemplateSimple = "Graphviz/fsm.gv.tmpl"
 
 
-renderGvSimple :: StateMachine -> FilePath -> IO ()
-renderGvSimple sm outFile = do
+renderGraphviz :: StateMachine -> FilePath -> IO ()
+renderGraphviz sm outDir = do
+  let outFile = outDir </> (smName sm) <.> "gv"
   gvTempl <- parseGingerFile defaultTemplateLoader gvTemplateSimple
   case gvTempl of
     Left err -> do

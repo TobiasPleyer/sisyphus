@@ -1,34 +1,66 @@
 #ifndef {{ FSM_NAME }}_H
 #define {{ FSM_NAME }}_H
 
+#define EVENT_QUEUE_SIZE 64
+#define SIGNAL_QUEUE_SIZE 128
+
 typedef enum {
 {% for event in FSM_EVENTS %}
-    {{ event }},
+    {{ FSM_NAME }}_{{ event }},
 {% endfor %}
     {{ FSM_NAME }}_NUM_EVENTS,
+    {{ FSM_NAME }}_NO_EVENT
 } {{ FSM_NAME }}_event_t;
 
 typedef enum {
 {% for state in FSM_STATES %}
-    {{ state }},
+    {{ FSM_NAME }}_{{ state }},
 {% endfor %}
     {{ FSM_NAME }}_NUM_STATES,
+    {{ FSM_NAME }}__UNDEFINED
 } {{ FSM_NAME }}_state_t;
 
 typedef void action_function_t (void);
+typedef void transition_function_t ({{ FSM_NAME }}_t*);
 
 {% for action in FSM_ACTIONS %}
-action_function_t {{ action }};
+extern action_function_t {{ action }};
 {% endfor %}
 
-struct {{ FSM_NAME }}_t {
+typedef struct {
     {{ FSM_NAME }}_state_t current_state;
-}
+    transition_function_t* transition_table[{{ FSM_NAME }}_NUM_STATES][{{ FSM_NAME }}_NUM_EVENTS];
+    int event_queue_start_index;
+    int event_queue_end_index;
+    int signal_queue_start_index;
+    int signal_queue_end_index;
+    {{ FSM_NAME }}_event_t event_queue[EVENT_QUEUE_SIZE];
+    {{ FSM_NAME }}_event_t signal_queue[SIGNAL_QUEUE_SIZE];
+} {{ FSM_NAME }}_t
 
-struct {{ FSM_NAME }}_t {{ FSM_NAME }};
+/* {{ FSM_NAME }}_New
+ * Creates a new state machine and returns it.
+ */
+{{ FSM_NAME }}_t* void {{ FSM_NAME }}_New(void);
 
-void {{ FSM_NAME }}_Init(void);
+/* {{ FSM_NAME }}_Start
+ * Starts the given state machine. Starting an event machine means to
+ * bring it in its initial state and execute all events and
+ * actions resulting from this transition.
+ */
+void {{ FSM_NAME }}_Start({{ FSM_NAME }}_t*);
 
-unsigned char {{ FSM_NAME }}_Dispatch({{ FSM_NAME }}_event_t event);
+/* {{ FSM_NAME }}_Deduct
+ * Advances the given state machine. Takes an event from the state machine's
+ * event queue, injects it into the state machine and deducts the state
+ * transitions. This process continues until there exist no more events in
+ * the queue.
+ */
+void {{ FSM_NAME }}_Deduct({{ FSM_NAME }}_t*);
+
+/* {{ FSM_NAME }}_AddEvent
+ * Add a new event to the state machine's event queue.
+ */
+void {{ FSM_NAME }}_AddEvent({{ FSM_NAME }}_t*, {{ FSM_NAME }}_event_t);
 
 #endif

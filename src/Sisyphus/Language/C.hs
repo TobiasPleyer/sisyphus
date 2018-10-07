@@ -8,6 +8,7 @@ module Sisyphus.Language.C
 import qualified Data.Map.Strict as M
 import qualified Data.Text as T
 import System.Exit (ExitCode(..), exitWith)
+import System.FilePath
 import Text.Ginger
        (makeContextText, Template, toGVal, runGinger, parseGingerFile, VarName)
 import Text.Ginger.GVal (ToGVal, GVal)
@@ -20,16 +21,23 @@ cTemplateSourceSimple = "C/fsm.c.tmpl"
 
 
 renderCSimple :: StateMachine -> FilePath -> IO ()
-renderCSimple sm outFile = do
+renderCSimple sm outDir = do
+  let outHeaderFile = outDir </> (smName sm) <.> "h"
+  let outSourceFile = outDir </> (smName sm) <.> "c"
   cHeaderTempl <- parseGingerFile defaultTemplateLoader cTemplateHeaderSimple
   case cHeaderTempl of
     Left err -> do
-      putStrLn "Failed to load the target!"
-      exitWith (ExitFailure 2)
+      putStrLn "Failed to load the header target!"
     Right cHeaderTemplate -> do
-      let
-        cContext  = mkCContext sm
-      renderTemplate cContext cHeaderTemplate outFile
+      let cContext  = mkCContext sm
+      renderTemplate cContext cHeaderTemplate outHeaderFile
+  cSourceTempl <- parseGingerFile defaultTemplateLoader cTemplateSourceSimple
+  case cSourceTempl of
+    Left err -> do
+      putStrLn "Failed to load the source target!"
+    Right cSourceTemplate -> do
+      let cContext  = mkCContext sm
+      renderTemplate cContext cSourceTemplate outSourceFile
 
 
 mkCContext sm = makeContextText contextLookup
@@ -38,7 +46,8 @@ mkCContext sm = makeContextText contextLookup
     contextMap = M.fromList [("FSM_NAME", toGVal fsm_name)
                             ,("FSM_EVENTS", toGVal fsm_events)
                             ,("FSM_STATES", toGVal fsm_states)
-                            ,("FSM_ACTIONS", toGVal fsm_actions)]
+                            ,("FSM_ACTIONS", toGVal fsm_actions)
+                            ,("FSM_START_STATE", toGVal (T.pack "Closed"))]
     fsm_name = T.pack $ smName sm
     fsm_events = map T.pack $ smEvents sm
     fsm_states = map T.pack $ M.keys (smStates sm)
