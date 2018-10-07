@@ -105,16 +105,19 @@ instance Show Reaction where
   show (EventEmit e) = '^' : e
   showsPrec _ r s = (show r) ++ s
 
-data ReactionClassifier = ReactEntry
-                        | ReactExit
-                        | ReactInternal String
+data ReactionClassifier = ReactEntry [Reaction]
+                        | ReactExit [Reaction]
+                        | ReactInternal Event [Guard] [Reaction]
                         deriving (Show)
 
-isEntry ReactEntry = True
-isEntry _          = False
+isEntry :: ReactionClassifier -> Bool
+isEntry (ReactEntry _) = True
+isEntry _              = False
 
-isExit ReactExit = True
-isExit _         = False
+isExit :: ReactionClassifier -> Bool
+isExit (ReactExit _) = True
+isExit _             = False
 
-isInternal (ReactInternal _) = True
-isInternal _                 = False
+isInternal :: ReactionClassifier -> Bool
+isInternal (ReactInternal _ _ _) = True
+isInternal _                     = False

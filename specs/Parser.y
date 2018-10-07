@@ -19,8 +19,10 @@ import Sisyphus.Lexer
     '|'          { SpecialT '|'   }
     '{'          { SpecialT '{'   }
     '}'          { SpecialT '}'   }
-    '^'          { SpecialT '^'   }
+    '['          { SpecialT '['   }
+    ']'          { SpecialT ']'   }
     '/'          { SpecialT '/'   }
+    '^'          { SpecialT '^'   }
     '@'          { SpecialT '@'   }
     ARROW        { ArrowT         }
     NAME         { NameT          }
@@ -63,45 +65,47 @@ state_attribute_list : ';'                              { [] }
 state_attributes : {- empty -}                          { [] }
                  | state_attribute                      { [$1] }
                  | state_attributes ',' state_attribute { $3 : $1 }
-state_attribute : ENTRY reactions                       { (ReactEntry,$2) }
-                | EXIT reactions                        { (ReactExit,$2) }
-                | INTERNAL ID '/' reactions             { (ReactInternal $2,$4)}
+state_attribute : ENTRY reactions                       { ReactEntry $2 }
+                | EXIT reactions                        { ReactExit $2 }
+                | INTERNAL ID guards '/' reactions      { ReactInternal $2 $3 $5 }
 
 reactions : reaction           { [$1] }
           | reactions reaction { $2 : $1 }
 reaction : '@' ID              { ActionCall $2 }
          | '^' ID              { EventEmit $2 }
 
-transitions : TRANSITIONS transition_specifiers                    { expandTransitions $ reverse $2 }
-transition_specifiers : transition_specifier                       { [$1] }
-                      | transition_specifiers transition_specifier { $2 : $1 }
-transition_specifier : bar_definition                              { mkTransition (Nothing,$1) }
+transitions : TRANSITIONS bar_arrow_definitions                    { expandTransitions $ reverse $2 }
+bar_arrow_definitions : bar_arrow_definition                       { [$1] }
+                      | bar_arrow_definitions bar_arrow_definition { $2 : $1 }
+bar_arrow_definition : bar_definition                              { mkTransition (Nothing,$1) }
                      | arrow_definition bar_definition             { mkTransition (Just $1,$2) }
 
 arrow_definition : ARROW ID    { (Nothing,$2) }
                  | ID ARROW ID { (Just $1,$3) }
 
-bar_definition : '|' ID ';' { $2 }
+bar_definition : '|' ID ';'                       { ($2,[],[]) }
+               | '|' ID guards '/' reactions ';'  { ($2,$3,$5) }
+
+guards : {- empty -}   { [] }
+       | guards guard  { $2 : $1 }
+guard : '[' ID ']'     { $2 }
 
 {
 
 mkState name attrs =
   let
-    entries = filter (isEntry . fst) attrs
-    exits = filter (isExit . fst) attrs
-    internals = filter (isInternal . fst) attrs
-    allEntries = map ((RSpec Nothing []) . snd) entries
-    allExits = map ((RSpec Nothing []) . snd) exits
-    allInternals = map mkInternal internals
+    entries = filter isEntry attrs
+    exits = filter isExit attrs
+    internals = filter isInternal attrs
+    allEntries = map (\(ReactEntry rs) -> RSpec Nothing [] rs) entries
+    allExits = map (\(ReactExit rs) -> RSpec Nothing [] rs) exits
+    allInternals = map (\(ReactInternal trig gs rs) -> RSpec (Just trig) gs rs) internals
   in
     State name allEntries allExits allInternals [] []
 
-mkInternal (ReactInternal trigger, reactions) = RSpec (Just trigger) [] reactions
-mkInternal _ = error "Not supported"
-
-mkTransition (Nothing,trigger) = (Nothing,Nothing,(Just trigger),[],[])
-mkTransition (Just (Nothing,dst),trigger) = (Nothing,Just dst,Just trigger,[],[])
-mkTransition (Just (Just src,dst),trigger) = (Just src,Just dst,Just trigger,[],[])
+mkTransition (Nothing,(t,gs,rs)) = (Nothing,Nothing,Just t,gs,rs)
+mkTransition (Just (Nothing,dst),(t,gs,rs)) = (Nothing,Just dst,Just t,gs,rs)
+mkTransition (Just (Just src,dst),(t,gs,rs)) = (Just src,Just dst,Just t,gs,rs)
 
 {-
 In grammar files it is possible to leave out source and destination if they are
