@@ -12,9 +12,10 @@ $alpha    = [$upper $lower]
 $alphanum = [$alpha $digit]
 $idchar   = [$alphanum \_]
 
-$special  = [\^\.\:\;\,\$\@\|\*\+\?\~\-\{\}\(\)\[\]\/]
+$special  = [\^\.\:\;\,\$\@\|\*\+\?\~\-\{\}\(\)\[\]\/\<\>\=\!]
 
 @id       = $alpha $idchar*
+@num      = $digit+
 @comment  = "#".*
 
 tokens :-
@@ -32,6 +33,7 @@ tokens :-
   "exit" \:                  { \s -> ExitT }
   "internal" \:              { \s -> InternalT }
   @id                        { \s -> IdT s }
+  @num                       { \s -> NumT s }
 
 {
 
@@ -47,6 +49,7 @@ data Token
   | ExitT
   | InternalT
   | IdT String
+  | NumT String
   | EOFT
   deriving Show
 

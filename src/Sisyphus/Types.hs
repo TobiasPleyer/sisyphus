@@ -55,8 +55,22 @@ data GrammarSummary = GS
 
 type Event  = String
 type Action = String
-type Guard  = String
 type TFuncSpec = [Reaction]
+
+data Guard = G String
+           | NotG String
+           | BinOpG Operator Var Var
+           deriving (Show)
+data Var = V String
+         | C String
+         deriving (Show)
+data Operator = OpEQ
+              | OpNEQ
+              | OpLT
+              | OpGT
+              | OpLE
+              | OpGE
+              deriving (Show)
 
 data State = State
   { stName                :: String

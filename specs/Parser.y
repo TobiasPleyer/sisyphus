@@ -24,6 +24,10 @@ import Sisyphus.Lexer
     '/'          { SpecialT '/'   }
     '^'          { SpecialT '^'   }
     '@'          { SpecialT '@'   }
+    '!'          { SpecialT '!'   }
+    '='          { SpecialT '='   }
+    '<'          { SpecialT '<'   }
+    '>'          { SpecialT '>'   }
     ARROW        { ArrowT         }
     NAME         { NameT          }
     EVENTS       { EventsT        }
@@ -34,6 +38,7 @@ import Sisyphus.Lexer
     EXIT         { ExitT          }
     INTERNAL     { InternalT      }
     ID           { IdT $$         }
+    NUM          { NumT $$        }
 
 %%
 
@@ -88,7 +93,22 @@ bar_definition : '|' ID ';'                       { ($2,[],[]) }
 
 guards : {- empty -}   { [] }
        | guards guard  { $2 : $1 }
-guard : '[' ID ']'     { $2 }
+guard : '[' guard_test ']'  { $2 }
+
+guard_test : '!' ID          { NotG $2 }
+           | ID '=' ID       { BinOpG OpEQ  (V $1) (V $3) }
+           | ID '!' '=' ID   { BinOpG OpNEQ (V $1) (V $4) }
+           | ID '<' ID       { BinOpG OpLT  (V $1) (V $3) }
+           | ID '<' '=' ID   { BinOpG OpLE  (V $1) (V $4) }
+           | ID '>' ID       { BinOpG OpGT  (V $1) (V $3) }
+           | ID '>' '=' ID   { BinOpG OpGE  (V $1) (V $4) }
+           | ID '=' NUM      { BinOpG OpEQ  (V $1) (C $3) }
+           | ID '!' '=' NUM  { BinOpG OpNEQ (V $1) (C $4) }
+           | ID '<' NUM      { BinOpG OpLT  (V $1) (C $3) }
+           | ID '<' '=' NUM  { BinOpG OpLE  (V $1) (C $4) }
+           | ID '>' NUM      { BinOpG OpGT  (V $1) (C $3) }
+           | ID '>' '=' NUM  { BinOpG OpGE  (V $1) (C $4) }
+           | ID              { G $1 }
 
 {
 
