@@ -1,0 +1,47 @@
+#-------------------------------------------
+#-- Protocol Decoder -----------------------
+#-------------------------------------------
+#
+# Messages are separated by two null bytes '\0\0'
+# The next byte is the length of the following message,
+# excluding the check sum bytes.
+# After the end of the message two check sum bytes are
+# sent. If the the check sum of the read message is
+# identical to the check sum bytes the message is
+# considered valid and sent to another application.
+
+%name ProtocolDecoderFSM
+
+%events
+    new_byte;
+    check_crc;
+    crc_ok;
+    crc_nok;
+    message_sent;
+
+%actions
+    do_store_length;
+    do_check_crc;
+    do_send_message;
+    do_report_bad_crc;
+
+%states
+    Start {}
+    Fst   {}
+    Snd   {}
+    Read  {}
+    Done  {entry: ^check_crc}
+    CRC   {entry: @do_check_crc}
+    Send  {entry: @do_send_message ^message_sent}
+
+%transitions
+    Start -> Fst    | new_byte [byte=='\0'] / ;
+    Fst   -> Snd    | new_byte [byte=='\0'] / ;
+          -> Start  | new_byte [byte!='\0'] / ;
+    Snd   -> Read   | new_byte / @do_store_length ;
+    Read  -> Read   | new_byte [read<length] / ;
+          -> Done   | new_byte [read==length] / ;
+    Done  -> CRC    | check_crc;
+    CRC   -> Start  | crc_nok / @do_report_bad_crc;
+    CRC   -> Send   | crc_ok;
+    Send  -> Start  | message_sent;
