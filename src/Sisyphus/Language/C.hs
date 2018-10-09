@@ -6,13 +6,15 @@ module Sisyphus.Language.C
 
 
 import qualified Data.Map.Strict as M
+import Data.Maybe (fromJust, isJust)
 import qualified Data.Text as T
 import System.Exit (ExitCode(..), exitWith)
 import System.FilePath
 import Text.Ginger
        (makeContextText, Template, toGVal, runGinger, parseGingerFile, VarName)
-import Text.Ginger.GVal (ToGVal, GVal)
+import Text.Ginger.GVal
 import Sisyphus.Types
+import Sisyphus.Ginger
 import Sisyphus.Language.Template (defaultTemplateLoader, renderTemplate)
 
 
@@ -47,8 +49,24 @@ mkCContext sm = makeContextText contextLookup
                             ,("FSM_EVENTS", toGVal fsm_events)
                             ,("FSM_STATES", toGVal fsm_states)
                             ,("FSM_ACTIONS", toGVal fsm_actions)
-                            ,("FSM_START_STATE", toGVal (T.pack "Closed"))]
+                            ,("FSM_START_STATE", toGVal (T.pack "Closed"))
+                            ,("FSM_STATE_MACHINE", toGVal sm)
+                            ,("triggers", fromFunction triggers)
+                            ]
     fsm_name = T.pack $ smName sm
     fsm_events = map T.pack $ smEvents sm
     fsm_states = map T.pack $ M.keys (smStates sm)
     fsm_actions = map T.pack $ smActions sm
+    triggers args =
+      let
+        event = T.unpack (asText (snd (head args)))
+        state = T.unpack (asText (snd (head (tail args))))
+      in return
+         . toGVal
+         . not
+         . null
+         . filter (==event)
+         . map fromJust
+         . filter isJust
+         . map tspecTrigger
+         $ stOutgoingTransitions ((smStates sm) M.! state)

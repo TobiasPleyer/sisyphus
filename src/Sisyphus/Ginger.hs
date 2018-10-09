@@ -1,4 +1,7 @@
-{-# LANGUAGE OverloadedStrings, FlexibleInstances, MultiParamTypeClasses, RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RecordWildCards #-}
 module Sisyphus.Ginger where
 
 
@@ -40,18 +43,32 @@ instance ToGVal m TransitionSpec where
               { asBoolean = True
               , isNull = False
               , asLookup = Just (\t -> case t of
-                                       "trigger"   -> Just gValTrigger
-                                       "guards"    -> Just gValGuards
-                                       "reactions" -> Just gValReactions
-                                       _           -> Nothing
+                                       "src"             -> Just gValSrc
+                                       "dst"             -> Just gValDst
+                                       "trigger"         -> Just gValTrigger
+                                       "guards"          -> Just gValGuards
+                                       "reactions"       -> Just gValReactions
+                                       "hasReactions"    -> Just gValHasReactions
+                                       "emitReactions"   -> Just gValEmitReactions
+                                       "actionReactions" -> Just gValActionReactions
+                                       _                 -> Nothing
                                   )
               }
     where
       gValSrc = toGVal $ T.pack $ tspecSrc ts
       gValDst = toGVal $ T.pack $ tspecDst ts
       gValTrigger = toGVal $ maybe "" (T.pack) (tspecTrigger ts)
-      gValGuards = toGVal (tspecGuards ts)
-      gValReactions = toGVal (tspecReactions ts)
+      gValGuards = toGVal $ tspecGuards ts
+      gValReactions = toGVal $ tspecReactions ts
+      gValHasReactions = toGVal $ not $ null $ tspecReactions ts
+      gValEmitReactions = toGVal
+                          . filter isEventEmit
+                          . tspecReactions
+                          $ ts
+      gValActionReactions = toGVal
+                            . filter isActionCall
+                            . tspecReactions
+                            $ ts
 
 
 instance ToGVal m State where
@@ -65,6 +82,8 @@ instance ToGVal m State where
                                       "internals"    -> Just gValInternals
                                       "ingoings"     -> Just gValIngoings
                                       "outgoings"    -> Just gValOutgoings
+                                      "hasIngoings"  -> Just gValHasIngoings
+                                      "hasOutgoings" -> Just gValHasOutgoings
                                       "hasEntries"   -> Just gValHasEntries
                                       "hasExits"     -> Just gValHasExits
                                       "hasInternals" -> Just gValHasInternals
@@ -82,6 +101,8 @@ instance ToGVal m State where
       gValInternals = toGVal $ stInternalReactions s
       gValIngoings = toGVal $ stIngoingTransitions s
       gValOutgoings = toGVal $ stOutgoingTransitions s
+      gValHasIngoings = toGVal (not (null (stIngoingTransitions s)))
+      gValHasOutgoings = toGVal (not (null (stOutgoingTransitions s)))
       gValHasEntries = toGVal (not (null (stEntryReactions s)))
       gValHasExits = toGVal (not (null (stExitReactions s)))
       gValHasInternals = toGVal (not (null (stInternalReactions s)))
@@ -130,7 +151,7 @@ instance ToGVal m StateMachine where
                                      "name"        -> Just gValName
                                      "events"      -> Just gValEvents
                                      "actions"     -> Just gValActions
-                                     "states"      -> Just gValStates
+                                     "stateMap"    -> Just gValStates
                                      "transitions" -> Just gValTransitions
                                      _             -> Nothing
                                 )

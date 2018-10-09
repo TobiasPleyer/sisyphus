@@ -5,16 +5,16 @@
 #define SIGNAL_QUEUE_SIZE 128
 
 typedef enum {
-{% for event in FSM_EVENTS %}
-    {{ FSM_NAME }}_{{ event }},
+{% for i,event in FSM_EVENTS %}
+    {{ FSM_NAME }}_{{ event }} = {{ i  }},
 {% endfor %}
     {{ FSM_NAME }}_NUM_EVENTS,
     {{ FSM_NAME }}_NO_EVENT
 } {{ FSM_NAME }}_event_t;
 
 typedef enum {
-{% for state in FSM_STATES %}
-    {{ FSM_NAME }}_{{ state }},
+{% for i,state in FSM_STATES %}
+    {{ FSM_NAME }}_{{ state }} = {{ i  }},
 {% endfor %}
     {{ FSM_NAME }}_NUM_STATES,
     {{ FSM_NAME }}__UNDEFINED

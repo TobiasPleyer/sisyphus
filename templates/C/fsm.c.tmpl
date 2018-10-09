@@ -5,7 +5,80 @@
 
 static void {{ FSM_NAME }}_AddSignal({{ FSM_NAME }}_t*, {{ FSM_NAME }}_event_t);
 
+/*** ENTRY FUNCTIONS ***/
+{% for name,state in FSM_STATE_MACHINE.stateMap %}
+{% if state.hasEntries %}
+void {{ FSM_NAME }}_{{ name }}__entry({{ FSM_NAME }}_t* pSM)
+{
+{% for emit in state.entryEmits %}
+    {{ FSM_NAME }}_AddSignal(pSM, {{ emit }});
+{% endfor %}
+{% for action in state.entryActions %}
+    {{ action }}();
+{% endfor %}
+}
 
+{% endif %}
+{% endfor %}
+
+/*** EXIT FUNCTIONS ***/
+{% for name,state in FSM_STATE_MACHINE.stateMap %}
+{% if state.hasExits %}
+void {{ FSM_NAME }}_{{ name }}__exit({{ FSM_NAME }}_t* pSM)
+{
+{% for emit in state.exitEmits %}
+    {{ FSM_NAME }}_AddSignal(pSM, {{ emit }});
+{% endfor %}
+{% for action in state.exitActions %}
+    {{ action }}();
+{% endfor %}
+}
+
+{% endif %}
+{% endfor %}
+
+/*** TRANSITION FUNCTIONS ***/
+{% for state in FSM_STATES %}
+{% if FSM_STATE_MACHINE.stateMap[state].hasOutgoings %}
+{% for out in FSM_STATE_MACHINE.stateMap[state].outgoings %}
+void {{ FSM_NAME }}_{{ state }}__on_{{ out.trigger }} ({{ FSM_NAME }}_t* pSM)
+{
+{% if FSM_STATE_MACHINE.stateMap[out.src].hasExits %}
+    {{ FSM_NAME }}_{{ out.dst }}__exit(pSM);
+{% endif %}
+{% if out.hasReactions %}
+{% for emit in out.EmitReactions %}
+    {{ FSM_NAME }}_AddSignal(pSM, {{ emit }});
+{% endfor %}
+{% for action in out.ActionReactions %}
+    {{ action }}();
+{% endfor %}
+{% endif %}
+{% if FSM_STATE_MACHINE.stateMap[out.dst].hasEntries %}
+    {{ FSM_NAME }}_{{ out.dst }}__entry(pSM);
+{% endif %}
+    pSM->current_state = {{ FSM_NAME }}_{{ out.dst }};
+}
+
+{% endfor %}
+{% endif %}
+{% endfor %}
+
+
+/*** TRANSITION TABLE ***/
+        /* {% for event in FSM_EVENTS -%} {{ event }} {% if loop.last %}{% else %},{% endif %} {% endfor %} */
+{% for state in FSM_STATES %}
+/* {{ state }} */
+{% endfor %}
+transition_function_t* {{ FSM_NAME }}_transition_table[ProtocolDecoderFSM_NUM_STATES][ProtocolDecoderFSM_NUM_EVENTS] = {
+{% for state in FSM_STATES %}
+    { {% for event in FSM_EVENTS -%} {% if triggers(event,state) %} &{{ FSM_NAME }}_{{ state }}__on_{{ event }} {% else %} NULL {% endif %} {% if loop.last %}{% else %},{% endif %} {% endfor %} } {% if loop.last %}{% else %},{% endif %}
+
+{% endfor %}
+};
+
+
+/*** FRAMEWORK ***/
 {{ FSM_NAME }}_t* void {{ FSM_NAME }}_New(void)
 {
     {{ FSM_NAME }}_t* pSM = ({{ FSM_NAME }}_t*) malloc(sizeof({{ FSM_NAME }}_t));
@@ -30,21 +103,31 @@ static void {{ FSM_NAME }}_AddSignal({{ FSM_NAME }}_t*, {{ FSM_NAME }}_event_t);
 void {{ FSM_NAME }}_Start({{ FSM_NAME }}_t* pSM)
 {
     pSM->current_state = {{ FSM_NAME }}_{{ FSM_START_STATE }};
-    // TODO
+{% if FSM_STATE_MACHINE.stateMap[FSM_START_STATE].hasEntries %}
+    {{ FSM_NAME }}_{{ FSM_START_STATE }}__entry(pSM);
+{% endif %}
 }
 
 void {{ FSM_NAME }}_Deduct({{ FSM_NAME }}_t* pSM)
 {
     while (pSM->event_queue[pSM->event_queue_start_index] != {{ FSM_NAME }}_NO_EVENT)
     {
-        {{ FSM_NAME }}_event_t current_event = pSM->event_queue[pSM->event_queue_start_index++];
+        {{ FSM_NAME }}_event_t current_event = pSM->event_queue[pSM->event_queue_start_index];
+        pSM->event_queue[pSM->event_queue_start_index++] = {{ FSM_NAME }}_NO_EVENT;
         transition_function_t* transition_func = pSM->transition_table[pSM->current_state][current_event];
-        (*transition_func)(pSM);
+        if (transition_func != NULL)
+        {
+            (*transition_func)(pSM);
+        }
         while (pSM->signal_queue[pSM->signal_queue_start_index] != {{ FSM_NAME }}_NO_EVENT)
         {
-            {{ FSM_NAME }}_event_t current_event = pSM->event_queue[pSM->signal_queue_start_index++];
+            {{ FSM_NAME }}_event_t current_event = pSM->event_queue[pSM->signal_queue_start_index];
+            pSM->event_queue[pSM->signal_queue_start_index++] = {{ FSM_NAME }}_NO_EVENT;
             transition_function_t* transition_func = pSM->transition_table[pSM->current_state][current_event];
-            (*transition_func)(pSM);
+            if (transition_func != NULL)
+            {
+                (*transition_func)(pSM);
+            }
         }
     }
 }
