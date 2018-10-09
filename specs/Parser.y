@@ -74,7 +74,7 @@ state_attribute : ENTRY reactions                       { ReactEntry $2 }
                 | EXIT reactions                        { ReactExit $2 }
                 | INTERNAL ID guards '/' reactions      { ReactInternal $2 $3 $5 }
 
-reactions : reaction           { [$1] }
+reactions : {- empty -}        { [] }
           | reactions reaction { $2 : $1 }
 reaction : '@' ID              { ActionCall $2 }
          | '^' ID              { EventEmit $2 }
@@ -96,13 +96,13 @@ guards : {- empty -}   { [] }
 guard : '[' guard_test ']'  { $2 }
 
 guard_test : '!' ID          { NotG $2 }
-           | ID '=' ID       { BinOpG OpEQ  (V $1) (V $3) }
+           | ID '=' '=' ID   { BinOpG OpEQ  (V $1) (V $4) }
            | ID '!' '=' ID   { BinOpG OpNEQ (V $1) (V $4) }
            | ID '<' ID       { BinOpG OpLT  (V $1) (V $3) }
            | ID '<' '=' ID   { BinOpG OpLE  (V $1) (V $4) }
            | ID '>' ID       { BinOpG OpGT  (V $1) (V $3) }
            | ID '>' '=' ID   { BinOpG OpGE  (V $1) (V $4) }
-           | ID '=' NUM      { BinOpG OpEQ  (V $1) (C $3) }
+           | ID '=' '=' NUM  { BinOpG OpEQ  (V $1) (C $4) }
            | ID '!' '=' NUM  { BinOpG OpNEQ (V $1) (C $4) }
            | ID '<' NUM      { BinOpG OpLT  (V $1) (C $3) }
            | ID '<' '=' NUM  { BinOpG OpLE  (V $1) (C $4) }

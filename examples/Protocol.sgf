@@ -35,9 +35,9 @@
     Send  {entry: @do_send_message ^message_sent}
 
 %transitions
-    Start -> Fst    | new_byte [byte=='\0'] / ;
-    Fst   -> Snd    | new_byte [byte=='\0'] / ;
-          -> Start  | new_byte [byte!='\0'] / ;
+    Start -> Fst    | new_byte [byte==0] / ;
+    Fst   -> Snd    | new_byte [byte==0] / ;
+          -> Start  | new_byte [byte!=0] / ;
     Snd   -> Read   | new_byte / @do_store_length ;
     Read  -> Read   | new_byte [read<length] / ;
           -> Done   | new_byte [read==length] / ;
