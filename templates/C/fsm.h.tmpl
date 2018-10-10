@@ -12,6 +12,8 @@ typedef enum {
     {{ FSM_NAME }}_NO_EVENT
 } {{ FSM_NAME }}_event_t;
 
+const char* const {{ FSM_NAME }}_event_to_str({{ FSM_NAME }}_event_t);
+
 typedef enum {
 {% for i,state in FSM_STATES %}
     {{ FSM_NAME }}_{{ state }} = {{ i  }},
@@ -20,14 +22,18 @@ typedef enum {
     {{ FSM_NAME }}__UNDEFINED
 } {{ FSM_NAME }}_state_t;
 
+const char* const {{ FSM_NAME }}_state_to_str({{ FSM_NAME }}_state_t);
+
+struct _{{ FSM_NAME }}_t;
+
 typedef void action_function_t (void);
-typedef void transition_function_t ({{ FSM_NAME }}_t*);
+typedef void transition_function_t (struct _{{ FSM_NAME }}_t*);
 
 {% for action in FSM_ACTIONS %}
 extern action_function_t {{ action }};
 {% endfor %}
 
-typedef struct {
+typedef struct _{{ FSM_NAME }}_t {
     {{ FSM_NAME }}_state_t current_state;
     transition_function_t* transition_table[{{ FSM_NAME }}_NUM_STATES][{{ FSM_NAME }}_NUM_EVENTS];
     int event_queue_start_index;
@@ -36,12 +42,12 @@ typedef struct {
     int signal_queue_end_index;
     {{ FSM_NAME }}_event_t event_queue[EVENT_QUEUE_SIZE];
     {{ FSM_NAME }}_event_t signal_queue[SIGNAL_QUEUE_SIZE];
-} {{ FSM_NAME }}_t
+} {{ FSM_NAME }}_t;
 
 /* {{ FSM_NAME }}_New
  * Creates a new state machine and returns it.
  */
-{{ FSM_NAME }}_t* void {{ FSM_NAME }}_New(void);
+{{ FSM_NAME }}_t* {{ FSM_NAME }}_New(void);
 
 /* {{ FSM_NAME }}_Start
  * Starts the given state machine. Starting an event machine means to

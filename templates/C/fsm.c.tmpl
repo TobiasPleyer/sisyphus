@@ -3,6 +3,20 @@
 #include "{{ FSM_NAME }}.h"
 
 
+static const char* const {{ FSM_NAME }}__event_names[] = {
+{% for event in FSM_EVENTS %}
+    "{{ FSM_NAME }}_{{ event }}",
+{% endfor %}
+    "Invalid"
+};
+
+static const char* const {{ FSM_NAME }}__state_names[] = {
+{% for state in FSM_STATES %}
+    "{{ FSM_NAME }}_{{ state }}",
+{% endfor %}
+    "Invalid"
+};
+
 static void {{ FSM_NAME }}_AddSignal({{ FSM_NAME }}_t*, {{ FSM_NAME }}_event_t);
 
 /*** ENTRY FUNCTIONS ***/
@@ -70,7 +84,7 @@ void {{ FSM_NAME }}_{{ state }}__on_{{ out.trigger }} ({{ FSM_NAME }}_t* pSM)
 {% for state in FSM_STATES %}
 /* {{ state }} */
 {% endfor %}
-transition_function_t* {{ FSM_NAME }}_transition_table[ProtocolDecoderFSM_NUM_STATES][ProtocolDecoderFSM_NUM_EVENTS] = {
+transition_function_t* {{ FSM_NAME }}_transition_table[{{ FSM_NAME }}_NUM_STATES][{{ FSM_NAME }}_NUM_EVENTS] = {
 {% for state in FSM_STATES %}
     { {% for event in FSM_EVENTS -%} {% if triggers(event,state) %} &{{ FSM_NAME }}_{{ state }}__on_{{ event }} {% else %} NULL {% endif %} {% if loop.last %}{% else %},{% endif %} {% endfor %} } {% if loop.last %}{% else %},{% endif %}
 
@@ -79,16 +93,37 @@ transition_function_t* {{ FSM_NAME }}_transition_table[ProtocolDecoderFSM_NUM_ST
 
 
 /*** FRAMEWORK ***/
-{{ FSM_NAME }}_t* void {{ FSM_NAME }}_New(void)
+
+const char* const {{ FSM_NAME }}_event_to_str({{ FSM_NAME }}_event_t ev)
 {
+    if (ev < {{ FSM_NAME }}_NUM_EVENTS) return {{ FSM_NAME }}__event_names[ev];
+    else return {{ FSM_NAME }}__event_names[{{ FSM_NAME }}_NUM_EVENTS];
+}
+
+const char* const {{ FSM_NAME }}_state_to_str({{ FSM_NAME }}_state_t st)
+{
+    if (st < {{ FSM_NAME }}_NUM_STATES) return {{ FSM_NAME }}__state_names[st];
+    else return {{ FSM_NAME }}__state_names[{{ FSM_NAME }}_NUM_STATES];
+}
+
+{{ FSM_NAME }}_t* {{ FSM_NAME }}_New(void)
+{
+    int i = 0;
+    int j = 0;
+
     {{ FSM_NAME }}_t* pSM = ({{ FSM_NAME }}_t*) malloc(sizeof({{ FSM_NAME }}_t));
     pSM->current_state = {{ FSM_NAME }}__UNDEFINED;
-    pSM->transition_table = {{ FSM_NAME }}_transition_table;
+    for (i=0; i<{{ FSM_NAME }}_NUM_STATES; i++)
+    {
+        for (j=0; j<{{ FSM_NAME }}_NUM_EVENTS; j++)
+        {
+            pSM->transition_table[i][j] = {{ FSM_NAME }}_transition_table[i][j];
+        }
+    }
     pSM->event_queue_start_index = 0;
     pSM->event_queue_end_index = 0;
     pSM->signal_queue_start_index = 0;
     pSM->signal_queue_end_index = 0;
-    int i = 0;
     for (i=0; i<EVENT_QUEUE_SIZE; i++)
     {
         pSM->event_queue[i] = {{ FSM_NAME }}_NO_EVENT;
