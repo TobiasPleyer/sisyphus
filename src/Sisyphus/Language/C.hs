@@ -59,8 +59,8 @@ mkCContext sm = makeContextText contextLookup
     fsm_actions = map T.pack $ smActions sm
     triggers args =
       let
-        event = T.unpack (asText (snd (head args)))
-        state = T.unpack (asText (snd (head (tail args))))
+        event = T.unpack (asText (snd (args !! 0)))
+        state = T.unpack (asText (snd (args !! 1)))
       in return
          . toGVal
          . not
