@@ -1,0 +1,104 @@
+
+
+/*** FRAMEWORK ***/
+
+const char* const {{ FSM_NAME }}_event_to_str({{ FSM_NAME }}_event_t ev)
+{
+    if ((ev >= 0) && (ev < {{ FSM_NAME }}_NUM_EVENTS)){
+        return {{ FSM_NAME }}__event_names[ev];
+    }
+    else
+    {
+        return {{ FSM_NAME }}__event_names[{{ FSM_NAME }}_NUM_EVENTS];
+    }
+}
+
+const char* const {{ FSM_NAME }}_state_to_str({{ FSM_NAME }}_state_t st)
+{
+    if ((st >= 0) && (st < {{ FSM_NAME }}_NUM_STATES)){
+        return {{ FSM_NAME }}__state_names[st];
+    }
+    else
+    {
+        return {{ FSM_NAME }}__state_names[{{ FSM_NAME }}_NUM_STATES];
+    }
+}
+
+{{ FSM_NAME }}_t* {{ FSM_NAME }}_New(void)
+{
+    int i = 0;
+    int j = 0;
+
+    {{ FSM_NAME }}_t* pSM = ({{ FSM_NAME }}_t*) malloc(sizeof({{ FSM_NAME }}_t));
+    pSM->current_state = {{ FSM_NAME }}__UNDEFINED;
+    for (i=0; i<{{ FSM_NAME }}_NUM_STATES; i++)
+    {
+        for (j=0; j<{{ FSM_NAME }}_NUM_EVENTS; j++)
+        {
+            pSM->transition_table[i][j] = {{ FSM_NAME }}_transition_table[i][j];
+        }
+    }
+    pSM->event_queue_start_index = 0;
+    pSM->event_queue_end_index = 0;
+    pSM->signal_queue_start_index = 0;
+    pSM->signal_queue_end_index = 0;
+    for (i=0; i<EVENT_QUEUE_SIZE; i++)
+    {
+        pSM->event_queue[i] = {{ FSM_NAME }}_NO_EVENT;
+    }
+    for (i=0; i<SIGNAL_QUEUE_SIZE; i++)
+    {
+        pSM->signal_queue[i] = {{ FSM_NAME }}_NO_EVENT;
+    }
+    return pSM;
+}
+
+void {{ FSM_NAME }}_Deduct({{ FSM_NAME }}_t* pSM)
+{
+    while (pSM->event_queue[pSM->event_queue_start_index] != {{ FSM_NAME }}_NO_EVENT)
+    {
+        {{ FSM_NAME }}_event_t current_event = pSM->event_queue[pSM->event_queue_start_index];
+        pSM->event_queue[pSM->event_queue_start_index++] = {{ FSM_NAME }}_NO_EVENT;
+        transition_function_t* transition_func = pSM->transition_table[pSM->current_state][current_event];
+        if (transition_func != NULL)
+        {
+            (*transition_func)(pSM);
+        }
+        while (pSM->signal_queue[pSM->signal_queue_start_index] != {{ FSM_NAME }}_NO_EVENT)
+        {
+            {{ FSM_NAME }}_event_t current_event = pSM->event_queue[pSM->signal_queue_start_index];
+            pSM->event_queue[pSM->signal_queue_start_index++] = {{ FSM_NAME }}_NO_EVENT;
+            transition_function_t* transition_func = pSM->transition_table[pSM->current_state][current_event];
+            if (transition_func != NULL)
+            {
+                (*transition_func)(pSM);
+            }
+        }
+    }
+}
+
+void {{ FSM_NAME }}_AddEvent({{ FSM_NAME }}_t* pSM, {{ FSM_NAME }}_event_t ev)
+{
+    if (pSM->event_queue[pSM->event_queue_end_index] != {{ FSM_NAME }}_NO_EVENT)
+    {
+        fprintf(stderr, "Event queue full!");
+        exit(1);
+    }
+    else
+    {
+        pSM->event_queue[pSM->event_queue_end_index++] = ev;
+    }
+}
+
+static void {{ FSM_NAME }}_AddSignal({{ FSM_NAME }}_t* pSM, {{ FSM_NAME }}_event_t signal)
+{
+    if (pSM->signal_queue[pSM->signal_queue_end_index] != {{ FSM_NAME }}_NO_EVENT)
+    {
+        fprintf(stderr, "Signal queue full!");
+        exit(1);
+    }
+    else
+    {
+        pSM->signal_queue[pSM->signal_queue_end_index++] = signal;
+    }
+}
