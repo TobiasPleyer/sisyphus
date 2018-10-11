@@ -7,14 +7,14 @@ static const char* const {{ FSM_NAME }}__event_names[] = {
 {% for event in FSM_EVENTS %}
     "{{ FSM_NAME }}_{{ event }}",
 {% endfor %}
-    "Invalid"
+    "Invalid Event ID"
 };
 
 static const char* const {{ FSM_NAME }}__state_names[] = {
 {% for state in FSM_STATES %}
     "{{ FSM_NAME }}_{{ state }}",
 {% endfor %}
-    "Invalid"
+    "Invalid State ID"
 };
 
 static void {{ FSM_NAME }}_AddSignal({{ FSM_NAME }}_t*, {{ FSM_NAME }}_event_t);
@@ -96,14 +96,24 @@ transition_function_t* {{ FSM_NAME }}_transition_table[{{ FSM_NAME }}_NUM_STATES
 
 const char* const {{ FSM_NAME }}_event_to_str({{ FSM_NAME }}_event_t ev)
 {
-    if (ev < {{ FSM_NAME }}_NUM_EVENTS) return {{ FSM_NAME }}__event_names[ev];
-    else return {{ FSM_NAME }}__event_names[{{ FSM_NAME }}_NUM_EVENTS];
+    if ((ev >= 0) && (ev < {{ FSM_NAME }}_NUM_EVENTS)){
+        return {{ FSM_NAME }}__event_names[ev];
+    }
+    else
+    {
+        return {{ FSM_NAME }}__event_names[{{ FSM_NAME }}_NUM_EVENTS];
+    }
 }
 
 const char* const {{ FSM_NAME }}_state_to_str({{ FSM_NAME }}_state_t st)
 {
-    if (st < {{ FSM_NAME }}_NUM_STATES) return {{ FSM_NAME }}__state_names[st];
-    else return {{ FSM_NAME }}__state_names[{{ FSM_NAME }}_NUM_STATES];
+    if ((st >= 0) && (st < {{ FSM_NAME }}_NUM_STATES)){
+        return {{ FSM_NAME }}__state_names[st];
+    }
+    else
+    {
+        return {{ FSM_NAME }}__state_names[{{ FSM_NAME }}_NUM_STATES];
+    }
 }
 
 {{ FSM_NAME }}_t* {{ FSM_NAME }}_New(void)
