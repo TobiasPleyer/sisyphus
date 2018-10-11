@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Sisyphus.Language.C
 ( renderCSimple
@@ -6,8 +7,10 @@ module Sisyphus.Language.C
 
 
 import Conduit
+import Control.Monad (forM_)
 import Data.Conduit
 import Data.Either (fromRight)
+import Data.Monoid
 import qualified Data.Map.Strict as M
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
@@ -94,7 +97,66 @@ renderCSimple_Hybrid sm outDir = do
             post = runGinger cContext cSourceTemplatePost
             source = do
               yield pre
+              emitEntries sm
+              emitExits sm
+              emitTransitions sm
               yield post
           runConduitRes $ source
                         .| encodeUtf8C
                         .| sinkFile outSourceFile
+
+
+emitEntries :: StateMachine -> ConduitT i T.Text (ResourceT IO) ()
+emitEntries SM{..} = do
+  yield "/*** ENTRY FUNCTIONS ***/\n"
+  forM_ (M.elems smStates) (emitEntriesSt (T.pack smName))
+
+
+emitExits :: StateMachine -> ConduitT i T.Text (ResourceT IO) ()
+emitExits SM{..} = do
+  yield "/*** EXIT FUNCTIONS ***/\n"
+  forM_ (M.elems smStates) (emitExitsSt (T.pack smName))
+
+
+emitEntriesSt :: T.Text -> State -> ConduitT i T.Text (ResourceT IO) ()
+emitEntriesSt name State{..} = do
+  if (not $ null $ stEntryReactions) then do
+    yield $ "void " <> name <> "_" <> (T.pack stName) <> "__entry(" <> name <> "_t* pSM)\n{\n"
+    forM_ stEntryReactions $ \e -> forM_ (rspecReactions e) $ \r -> do
+      case r of
+        ActionCall a -> yield $ "\t" <> (T.pack a) <> "();\n"
+        EventEmit ev -> yield $ "\t" <> name <> "_AddSignal(pSM, " <> name <> "_" <> (T.pack ev) <> ");\n"
+    yield "}\n\n"
+  else return ()
+
+
+emitExitsSt :: T.Text -> State -> ConduitT i T.Text (ResourceT IO) ()
+emitExitsSt name State{..} = do
+  if (not $ null $ stExitReactions) then do
+    yield $ "void " <> name <> "_" <> (T.pack stName) <> "__exit(" <> name <> "_t* pSM)\n{\n"
+    forM_ stExitReactions $ \e -> forM_ (rspecReactions e) $ \r -> do
+      case r of
+        ActionCall a -> yield $ "\t" <> (T.pack a) <> "();\n"
+        EventEmit ev -> yield $ "\t" <> name <> "_AddSignal(pSM, " <> name <> "_" <> (T.pack ev) <> ");\n"
+    yield "}\n\n"
+  else return ()
+
+
+emitTransitions sm@SM{..} = do
+  yield "/*** TRANSITION FUNCTIONS ***/\n"
+  forM_ (M.elems smStates) (emitTransitionsSt sm (T.pack smName))
+
+
+emitTransitionsSt sm name s = do
+  forM_ (stOutgoingTransitions s) $ \o -> do
+    let
+      trigger = maybe "" T.pack (tspecTrigger o)
+      dstState = (smStates sm) M.! (tspecDst o)
+    yield $ "void " <> name <> "_" <> (T.pack (stName s)) <> "__on_" <> trigger <> "(" <> name <> "_t* pSM)\n{\n"
+    if (not $ null $ (stExitReactions s)) then
+      yield $ "\t" <> name <> "_" <> (T.pack (stName s)) <> "__exit(" <> name <> "_t* pSM);\n"
+    else return ()
+    if (not $ null $ (stEntryReactions dstState)) then
+      yield $ "\t" <> name <> "_" <> (T.pack (stName dstState)) <> "__entry(" <> name <> "_t* pSM);\n"
+    else return ()
+    yield "}\n\n"
