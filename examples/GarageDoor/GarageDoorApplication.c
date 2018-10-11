@@ -1,24 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <termios.h>
 #include "GarageDoorFSM.h"
-
-
-void blink_on(void)
-{
-    printf("blink_on()\n");
-}
-
-void blink_off(void)
-{
-    printf("blink_off()\n");
-}
-
-void start_timer(void)
-{
-    printf("start_timer()\n");
-}
 
 
 int main()
