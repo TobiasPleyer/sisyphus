@@ -70,14 +70,14 @@ code by hand. Because of its simplicity Sisyphus cannot fully compete with
 full featured commercial products, but is meant to provide simple solutions to
 common problems.
 
-## Currently supported targets languages
+## Currently supported target languages
 
     - Graphviz
     - C
 
 ## What Sisyphus is not
 
-    - Not the next Simulink or VisualState
+    - Not the next Simulink, Enterprise Architect or VisualState
     - Not meant as a graphical tool (no GUI planned)
 
 ## Future work
@@ -90,8 +90,8 @@ common problems.
     - [x] Sisyphus grammar specification
     - [x] Lexer/Parser for grammar
     - [x] Plausibility checks for grammar input
-    - [ ] Code generation mechanism
-    - [ ] Produce code in C
+    - [x] Code generation mechanism
+    - [x] Produce code in C
     - [ ] Produce code in C++
     - [ ] Produce code in Python
     - [ ] Support for internal variables
