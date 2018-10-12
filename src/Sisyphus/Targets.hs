@@ -10,7 +10,9 @@ import Sisyphus.Language.C
 
 
 supportedTargets = M.fromList [ ("Graphviz", renderGraphviz)
-                              , ("C::Simple", renderCSimple)]
+                              , ("C", renderCSimple)
+                              , ("C::Simple", renderCSimple)
+                              ]
 
 
 renderTarget sm outDir target = do

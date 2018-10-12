@@ -73,6 +73,7 @@ common problems.
 ## Currently supported targets languages
 
     - Graphviz
+    - C
 
 ## What Sisyphus is not
 
