@@ -7,6 +7,7 @@ module Sisyphus.Language.C
 
 
 import Conduit
+import Control.Applicative (liftA2)
 import Control.Monad (forM_)
 import Data.Conduit
 import Data.Either (fromRight)
@@ -17,8 +18,7 @@ import qualified Data.Text.Encoding as TE
 import System.Exit (ExitCode(..), exitWith)
 import System.FilePath
 import Text.Ginger
-       (makeContextText, Template, toGVal, runGinger, parseGingerFile, VarName)
-import Text.Ginger.GVal (ToGVal, GVal)
+import Text.Ginger.GVal
 import Sisyphus.Types
 import Sisyphus.Language.Template (defaultTemplateLoader, renderTemplate)
 
@@ -83,27 +83,29 @@ renderCSimple_Hybrid sm outDir = do
     outSourceFile = outDir </> (smName sm) <.> "c"
     cContext  = mkCContext sm
   cSourceTemplatePre <- parseGingerFile defaultTemplateLoader cTemplateSourceSimplePre
-  case cSourceTemplatePre of
+  cSourceTemplatePost <- parseGingerFile defaultTemplateLoader cTemplateSourceSimplePost
+  let parsedTemplates = liftA2 (,) cSourceTemplatePre cSourceTemplatePost
+  case parsedTemplates of
     Left err -> do
-      putStrLn "Failed to load the source pre template!"
-    Right cSourceTemplatePre -> do
-      let pre = runGinger cContext cSourceTemplatePre
-      cSourceTemplatePost <- parseGingerFile defaultTemplateLoader cTemplateSourceSimplePost
-      case cSourceTemplatePost of
-        Left err -> do
-          putStrLn "Failed to load the source post template!"
-        Right cSourceTemplatePost -> do
-          let
-            post = runGinger cContext cSourceTemplatePost
-            source = do
-              yield pre
-              emitEntries sm
-              emitExits sm
-              emitTransitions sm
-              yield post
-          runConduitRes $ source
-                        .| encodeUtf8C
-                        .| sinkFile outSourceFile
+      printGingerParseError err
+    Right (preTmpl,postTmpl) -> do
+      let
+        pre = runGinger cContext preTmpl
+        post = runGinger cContext postTmpl
+        source = do
+          yield pre
+          emitEntries sm
+          emitExits sm
+          emitTransitions sm
+          yield post
+      runConduitRes $ source
+                    .| encodeUtf8C
+                    .| sinkFile outSourceFile
+
+
+printGingerParseError err = do
+  maybe (return ()) print (peSourcePosition err)
+  putStrLn (peErrorMessage err)
 
 
 emitEntries :: StateMachine -> ConduitT i T.Text (ResourceT IO) ()
