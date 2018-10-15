@@ -1,5 +1,4 @@
 
-
 /*** FRAMEWORK ***/
 
 const char* const {{ FSM_NAME }}_event_to_str({{ FSM_NAME }}_event_t ev)
@@ -51,6 +50,14 @@ const char* const {{ FSM_NAME }}_state_to_str({{ FSM_NAME }}_state_t st)
         pSM->signal_queue[i] = {{ FSM_NAME }}_NO_EVENT;
     }
     return pSM;
+}
+
+void {{ FSM_NAME }}_Start({{ FSM_NAME }}_t* pSM)
+{
+    pSM->current_state = {{ FSM_NAME }}_{{ FSM_START_STATE }};
+{% if FSM_STATE_MACHINE.stateMap[FSM_START_STATE].hasEntries %}
+    {{ FSM_NAME }}_{{ FSM_START_STATE }}__entry(pSM);
+{% endif %}
 }
 
 void {{ FSM_NAME }}_Deduct({{ FSM_NAME }}_t* pSM)

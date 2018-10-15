@@ -176,21 +176,21 @@ emitTransitionsSt sm name s = do
       dstState = (smStates sm) M.! (tspecDst o)
     yield $ "void " <> name <> "_" <> (T.pack (stName s)) <> "__on_" <> trigger <> "(" <> name <> "_t* pSM)\n{\n"
     if (not $ null $ (stExitReactions s)) then
-      yield $ "\t" <> name <> "_" <> (T.pack (stName s)) <> "__exit(" <> name <> "_t* pSM);\n"
+      yield $ "\t" <> name <> "_" <> (T.pack (stName s)) <> "__exit(pSM);\n"
     else return ()
     forM_ (tspecReactions o) $ \r -> do
       case r of
         ActionCall a -> yield $ "\t" <> (T.pack a) <> "();\n"
         EventEmit ev -> yield $ "\t" <> name <> "_AddSignal(pSM, " <> name <> "_" <> (T.pack ev) <> ");\n"
     if (not $ null $ (stEntryReactions dstState)) then
-      yield $ "\t" <> name <> "_" <> (T.pack (stName dstState)) <> "__entry(" <> name <> "_t* pSM);\n"
+      yield $ "\t" <> name <> "_" <> (T.pack (stName dstState)) <> "__entry(pSM);\n"
     else return ()
     yield $ "\tpSM->current_state = " <> name <> "_" <> (T.pack (stName dstState)) <> ";\n"
     yield "}\n\n"
   forM_ (stInternalReactions s) $ \i -> do
     let
       trigger = maybe "" T.pack (rspecTrigger i)
-    yield $ "void " <> name <> "_" <> (T.pack (stName s)) <> "__on_" <> trigger <> "(" <> name <> "_t* pSM)\n{\n"
+    yield $ "void " <> name <> "_" <> (T.pack (stName s)) <> "__on_" <> trigger <> "(pSM)\n{\n"
     forM_ (rspecReactions i) $ \r -> do
       case r of
         ActionCall a -> yield $ "\t" <> (T.pack a) <> "();\n"
