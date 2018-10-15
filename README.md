@@ -1,3 +1,5 @@
+<img src="http://tpleyer.de/Sisyphus_Logo.png" alt="logo" width="250px"/>
+
 # Sisyphus - The simple finite state machine generator
 
 ## What is Sisyphus?
