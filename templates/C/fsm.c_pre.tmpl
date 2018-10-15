@@ -1,0 +1,22 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include "{{ FSM_NAME }}.h"
+
+
+static const char* const {{ FSM_NAME }}__event_names[] = {
+{% for event in FSM_EVENTS %}
+    "{{ FSM_NAME }}_{{ event }}",
+{% endfor %}
+    "Invalid Event ID"
+};
+
+static const char* const {{ FSM_NAME }}__state_names[] = {
+{% for state in FSM_STATES %}
+    "{{ FSM_NAME }}_{{ state }}",
+{% endfor %}
+    "Invalid State ID"
+};
+
+static void {{ FSM_NAME }}_AddSignal({{ FSM_NAME }}_t*, {{ FSM_NAME }}_event_t);
+
+
