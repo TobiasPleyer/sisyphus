@@ -1,6 +1,7 @@
 module Sisyphus.Util where
 
 
+import Data.Maybe
 import Sisyphus.Types
 
 
@@ -48,3 +49,16 @@ addOutgoingTransition t s =
     outs = stOutgoingTransitions s
     s' = s{stOutgoingTransitions=(t:outs)}
   in s'
+
+
+isTriggeredBy :: State -> Event -> Bool
+isTriggeredBy state event = not
+                          . null
+                          . filter (==event)
+                          . map fromJust
+                          . filter isJust
+                          . concat
+                          $ [ map tspecTrigger (stOutgoingTransitions state)
+                            , map rspecTrigger (stInternalReactions state)
+                            ]
+
