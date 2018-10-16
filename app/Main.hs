@@ -5,13 +5,21 @@ module Main where
 import Control.Monad (forM_, when)
 import System.Console.CmdArgs
 import System.FilePath
-import System.Exit (exitFailure, exitSuccess)
+import System.Exit (exitFailure, exitSuccess, exitWith, ExitCode(..))
+import System.IO (stderr, hPutStr)
 
-import Sisyphus.Lexer (tokenize)
-import Sisyphus.Parser (parse)
 import Sisyphus.Types
+import Sisyphus.ParseMonad
+import Sisyphus.Parser
 import Sisyphus.Compile
 import Sisyphus.Targets (supportedTargets, renderTarget)
+
+
+bye :: String -> IO a
+bye s = putStr s >> exitWith ExitSuccess
+
+die :: String -> IO a
+die s = hPutStr stderr s >> exitWith (ExitFailure 1)
 
 
 data Options = Options
@@ -40,29 +48,39 @@ options = cmdArgsMode $ Options
 main :: IO ()
 main = do
   opts <- cmdArgsRun options
-  sgf <- readFile $ head $ files opts
-  let sm = parse $ tokenize sgf
-  let smry = runChecks sm
-  when (and [ not $ null $ warnings smry
-            , not $ no_warnings opts
-            , not $ warn_is_error opts]) $ do
-    putStrLn "== Warnings =="
-    forM_ (warnings smry) putStrLn
-  -- This is the final summary after the command line flags have been evaluated
-  let summary = if (warn_is_error opts)
-                 then
-                   let errors' = (warnings smry) ++ (errors smry)
-                   in smry{errors=errors'}
-                 else smry
-  when (not $ null $ errors summary) $ do
-    putStrLn "The following errors prevent further processing:"
-    putStrLn "== Errors =="
-    forM_ (errors summary) putStrLn
-    exitFailure
-  -- This is the state machine after the checks have been run
-  let statemachine = stateMachine summary
-  forM_ (targets opts) $ renderTarget statemachine (outputdir opts)
-  when (print_statemachine opts) $
-    print statemachine
-  print "Done"
-  exitSuccess
+  let file = head $ files opts
+  sgf <- readFile file
+  putStrLn sgf
+  --sm <- case runP sgf parse of
+  --  Left (Just (AlexPn _ line col),err) ->
+  --          die (file ++ ":" ++ show line ++ ":" ++ show col
+  --                           ++ ": " ++ err ++ "\n")
+  --  Left (Nothing, err) ->
+  --          die (file ++ ": " ++ err ++ "\n")
+
+  --  Right script -> return script
+  --print sm
+  --let smry = runChecks sm
+  --when (and [ not $ null $ warnings smry
+  --          , not $ no_warnings opts
+  --          , not $ warn_is_error opts]) $ do
+  --  putStrLn "== Warnings =="
+  --  forM_ (warnings smry) putStrLn
+  ---- This is the final summary after the command line flags have been evaluated
+  --let summary = if (warn_is_error opts)
+  --               then
+  --                 let errors' = (warnings smry) ++ (errors smry)
+  --                 in smry{errors=errors'}
+  --               else smry
+  --when (not $ null $ errors summary) $ do
+  --  putStrLn "The following errors prevent further processing:"
+  --  putStrLn "== Errors =="
+  --  forM_ (errors summary) putStrLn
+  --  exitFailure
+  ---- This is the state machine after the checks have been run
+  --let statemachine = stateMachine summary
+  --forM_ (targets opts) $ renderTarget statemachine (outputdir opts)
+  --when (print_statemachine opts) $
+  --  print statemachine
+  --print "Done"
+  --exitSuccess

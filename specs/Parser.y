@@ -1,9 +1,12 @@
 {
-module Sisyphus.Parser (parse) where
+{-# OPTIONS_GHC -w #-}
+module Sisyphus.Parser (parse, P) where
 
+import Data.Char
 import qualified Data.Map.Strict as M
 import Control.Arrow ((&&&))
 
+import Sisyphus.ParseMonad hiding ( StartCode )
 import Sisyphus.Types
 import Sisyphus.Lexer
 }
@@ -11,34 +14,36 @@ import Sisyphus.Lexer
 %tokentype { Token }
 
 %name parse
-%error { parseError }
+
+%monad { P } { (>>=) } { return }
+%lexer { lexer } { T _ EOFT }
 
 %token
-    ';'          { SpecialT ';'   }
-    ','          { SpecialT ','   }
-    '|'          { SpecialT '|'   }
-    '{'          { SpecialT '{'   }
-    '}'          { SpecialT '}'   }
-    '['          { SpecialT '['   }
-    ']'          { SpecialT ']'   }
-    '/'          { SpecialT '/'   }
-    '^'          { SpecialT '^'   }
-    '@'          { SpecialT '@'   }
-    '!'          { SpecialT '!'   }
-    '='          { SpecialT '='   }
-    '<'          { SpecialT '<'   }
-    '>'          { SpecialT '>'   }
-    ARROW        { ArrowT         }
-    NAME         { NameT          }
-    EVENTS       { EventsT        }
-    ACTIONS      { ActionsT       }
-    STATES       { StatesT        }
-    TRANSITIONS  { TransitionsT   }
-    ENTRY        { EntryT         }
-    EXIT         { ExitT          }
-    INTERNAL     { InternalT      }
-    ID           { IdT $$         }
-    NUM          { NumT $$        }
+    ';'          { T _ (SpecialT ';' ) }
+    ','          { T _ (SpecialT ',' ) }
+    '|'          { T _ (SpecialT '|' ) }
+    '{'          { T _ (SpecialT '{' ) }
+    '}'          { T _ (SpecialT '}' ) }
+    '['          { T _ (SpecialT '[' ) }
+    ']'          { T _ (SpecialT ']' ) }
+    '/'          { T _ (SpecialT '/' ) }
+    '^'          { T _ (SpecialT '^' ) }
+    '@'          { T _ (SpecialT '@' ) }
+    '!'          { T _ (SpecialT '!' ) }
+    '='          { T _ (SpecialT '=' ) }
+    '<'          { T _ (SpecialT '<' ) }
+    '>'          { T _ (SpecialT '>' ) }
+    ARROW        { T _ (ArrowT       ) }
+    NAME         { T _ (NameT        ) }
+    EVENTS       { T _ (EventsT      ) }
+    ACTIONS      { T _ (ActionsT     ) }
+    STATES       { T _ (StatesT      ) }
+    TRANSITIONS  { T _ (TransitionsT ) }
+    ENTRY        { T _ (EntryT       ) }
+    EXIT         { T _ (ExitT        ) }
+    INTERNAL     { T _ (InternalT    ) }
+    ID           { T _ (IdT $$       ) }
+    NUM          { T _ (NumT $$      ) }
 
 %%
 
@@ -111,6 +116,8 @@ guard_test : '!' ID          { NotG $2 }
            | ID              { G $1 }
 
 {
+happyError :: P a
+happyError = failP "parse error"
 
 mkState name attrs =
   let
