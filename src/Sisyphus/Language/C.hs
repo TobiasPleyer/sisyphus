@@ -10,20 +10,15 @@ import Conduit
 import Control.Applicative (liftA2)
 import Control.Monad (forM_)
 import Data.Conduit
-import Data.Either (fromRight)
 import Data.Monoid
 import qualified Data.Map.Strict as M
-import Data.Maybe (fromJust, isJust)
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as TE
-import System.Exit (ExitCode(..), exitWith)
 import System.FilePath
 import Text.Ginger
-import Text.Ginger.GVal
 import Sisyphus.Types
 import Sisyphus.Ginger
 import Sisyphus.Util
-import Sisyphus.Language.Template (defaultTemplateLoader, renderTemplate)
+import Sisyphus.Language.Template
 
 
 cTemplateHeaderSimple = "C/fsm.h.tmpl"
@@ -37,95 +32,40 @@ renderCSimple = renderCSimple_Hybrid
 
 renderCSimple_GingerOnly :: StateMachine -> FilePath -> IO ()
 renderCSimple_GingerOnly sm outDir = do
-  renderCHeaderSimple_GingerOnly sm outDir
-  renderCSourceSimple_GingerOnly sm outDir
-
-
-renderCHeaderSimple_GingerOnly :: StateMachine -> FilePath -> IO ()
-renderCHeaderSimple_GingerOnly sm outDir = do
-  let outHeaderFile = outDir </> (smName sm) <.> "h"
-  cHeaderTempl <- parseGingerFile defaultTemplateLoader cTemplateHeaderSimple
-  case cHeaderTempl of
-    Left err -> do
-      putStrLn "Failed to load the header template!"
-    Right cHeaderTemplate -> do
-      let cContext  = mkCContext sm
-      renderTemplate cContext cHeaderTemplate outHeaderFile
-
-
-renderCSourceSimple_GingerOnly :: StateMachine -> FilePath -> IO ()
-renderCSourceSimple_GingerOnly sm outDir = do
-  let outSourceFile = outDir </> (smName sm) <.> "c"
-  cSourceTempl <- parseGingerFile defaultTemplateLoader cTemplateSourceSimple
-  case cSourceTempl of
-    Left err -> do
-      putStrLn "Failed to load the source template!"
-    Right cSourceTemplate -> do
-      let cContext  = mkCContext sm
-      renderTemplate cContext cSourceTemplate outSourceFile
-
-
-mkCContext sm = makeContextText contextLookup
-  where
-    contextLookup key = (M.!) contextMap key
-    contextMap = M.fromList [("FSM_NAME", toGVal fsm_name)
-                            ,("FSM_EVENTS", toGVal fsm_events)
-                            ,("FSM_STATES", toGVal fsm_states)
-                            ,("FSM_ACTIONS", toGVal fsm_actions)
-                            ,("FSM_START_STATE", toGVal (T.pack "Closed"))
-                            ,("FSM_STATE_MACHINE", toGVal sm)
-                            ,("triggers", fromFunction triggers)
-                            ]
-    fsm_name = T.pack $ smName sm
-    fsm_events = map T.pack $ smEvents sm
-    fsm_states = map T.pack $ M.keys (smStates sm)
-    fsm_actions = map T.pack $ smActions sm
-    triggers args =
-      let
-        event = T.unpack (asText (snd (args !! 0)))
-        state = T.unpack (asText (snd (args !! 1)))
-      in return
-         . toGVal
-         . not
-         . null
-         . filter (==event)
-         . map fromJust
-         . filter isJust
-         . map tspecTrigger
-         $ stOutgoingTransitions ((smStates sm) M.! state)
+  let
+    name = smName sm
+    context  = mkContext sm
+  renderFromFile context outDir cTemplateHeaderSimple (name <.> "h")
+  renderFromFile context outDir cTemplateSourceSimple (name <.> "c")
 
 
 renderCSimple_Hybrid :: StateMachine -> FilePath -> IO ()
 renderCSimple_Hybrid sm outDir = do
-  renderCHeaderSimple_GingerOnly sm outDir
   let
-    outSourceFile = outDir </> (smName sm) <.> "c"
-    cContext  = mkCContext sm
+    name = smName sm
+    context  = mkContext sm
+
+  renderFromFile context outDir cTemplateHeaderSimple (name <.> "h")
+
   cSourceTemplatePre <- parseGingerFile defaultTemplateLoader cTemplateSourceSimplePre
   cSourceTemplatePost <- parseGingerFile defaultTemplateLoader cTemplateSourceSimplePost
+
   let parsedTemplates = liftA2 (,) cSourceTemplatePre cSourceTemplatePost
   case parsedTemplates of
     Left err -> do
-      printGingerParseError err
+      printParseError err
     Right (preTmpl,postTmpl) -> do
       let
-        pre = runGinger cContext preTmpl
-        post = runGinger cContext postTmpl
         source = do
-          yield pre
+          yield $ runGinger context preTmpl
           emitEntries sm
           emitExits sm
           emitTransitions sm
           emitTransitionTable sm
-          yield post
+          yield $ runGinger context postTmpl
       runConduitRes $ source
                     .| encodeUtf8C
-                    .| sinkFile outSourceFile
-
-
-printGingerParseError err = do
-  maybe (return ()) print (peSourcePosition err)
-  putStrLn (peErrorMessage err)
+                    .| sinkFile (outDir </> name <.> "c")
 
 
 emitEntries :: StateMachine -> ConduitT i T.Text (ResourceT IO) ()
