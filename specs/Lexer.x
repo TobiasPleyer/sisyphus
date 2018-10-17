@@ -80,8 +80,8 @@ trans     (p,_,_)   _  = return $ T p TransitionsT
 entry     (p,_,_)   _  = return $ T p EntryT
 exit      (p,_,_)   _  = return $ T p ExitT
 internal  (p,_,_)   _  = return $ T p InternalT
-ident     (p,_,str) _  = return $ T p (IdT str)
-number    (p,_,str) _  = return $ T p (NumT str)
+ident     (p,_,str) ln = return $ T p (IdT (take ln str))
+number    (p,_,str) ln = return $ T p (NumT (take ln str))
 
 
 lexError :: String -> P a
