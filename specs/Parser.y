@@ -68,7 +68,7 @@ states : {- empty -}                                { M.empty }
        | STATES state_specifiers                    { M.fromList $ map (stName &&& id) $2 }
 state_specifiers : state_specifier                  { [$1] }
                  | state_specifiers state_specifier { $2 : $1 }
-state_specifier : ID state_attribute_list           { mkState $1 $2 }
+state_specifier : ID state_attribute_list           {% mkState $1 $2 }
 
 state_attribute_list : ';'                              { [] }
                      | '{' state_attributes '}'         { $2 }
@@ -119,7 +119,8 @@ guard_test : '!' ID          { NotG $2 }
 happyError :: P a
 happyError = failP "parse error"
 
-mkState name attrs =
+mkState :: String -> [ReactionClassifier] -> P State
+mkState name attrs = do
   let
     entries = filter isEntry attrs
     exits = filter isExit attrs
@@ -127,8 +128,11 @@ mkState name attrs =
     allEntries = map (\(ReactEntry rs) -> RSpec Nothing [] rs) entries
     allExits = map (\(ReactExit rs) -> RSpec Nothing [] rs) exits
     allInternals = map (\(ReactInternal trig gs rs) -> RSpec (Just trig) gs rs) internals
-  in
-    State name allEntries allExits allInternals [] []
+  startState <- getStartState
+  case startState of
+    NoStartState -> setDefaultStartState name
+    _ -> return ()
+  return $ State name allEntries allExits allInternals [] []
 
 mkTransition (Nothing,(t,gs,rs)) = (Nothing,Nothing,Just t,gs,rs)
 mkTransition (Just (Nothing,dst),(t,gs,rs)) = (Nothing,Just dst,Just t,gs,rs)

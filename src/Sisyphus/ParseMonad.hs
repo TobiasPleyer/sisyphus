@@ -2,7 +2,7 @@ module Sisyphus.ParseMonad (
         AlexInput, alexInputPrevChar, alexGetChar, alexGetByte,
         AlexPosn(..), alexStartPos,
 
-        P, runP, failP, getInput, setInput,
+        P, runP, failP, getInput, setInput, StartState(..),
         setDefaultStartState, setExplicitStartState, getStartState,
         StartCode, setStartCode, getStartCode
  ) where
