@@ -5,25 +5,19 @@ module Sisyphus.Compile where
 
 import Control.Monad (forM_, mapM_)
 import Data.Foldable (traverse_)
-import Data.List ((\\))
 import qualified Control.Monad.Trans.State.Lazy as TSL
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import Sisyphus.Types
-import Sisyphus.Util (addIngoingTransition, addOutgoingTransition)
+import Sisyphus.Util (dedupeList, addIngoingTransition, addOutgoingTransition)
 
 
-runChecks :: StateMachine -> GrammarSummary
-runChecks sm@SM{..} = flip TSL.execState initialSummary $ do
+runChecks :: GrammarSummary -> GrammarSummary
+runChecks gs = flip TSL.execState gs $ do
     checkDuplicates
-    checkStates smStates
-    checkTransitions smTransitions
+    checkStates (smStates (stateMachine gs))
+    checkTransitions (smTransitions (stateMachine gs))
     checkFinal
-  where
-    initialSummary = GS sm eventSet actionSet stateSet stateSet [] []
-    eventSet = S.fromList smEvents
-    actionSet = S.fromList smActions
-    stateSet = S.fromList $ M.keys smStates
 
 
 type SummaryM = TSL.State GrammarSummary
@@ -37,22 +31,16 @@ checkDuplicates = do
 
 dedupeEvents = do
   events <- getEvents
-  uniques <- dedupeList "Event" events
+  let (redefs,uniques) = dedupeList events
+  forM_ redefs $ \redef -> addWarning ("Event '" ++ redef ++ "' has already been defined")
   setEvents uniques
 
 
 dedupeActions = do
   actions <- getActions
-  uniques <- dedupeList "Action" actions
+  let (redefs,uniques) = dedupeList actions
+  forM_ redefs $ \redef -> addWarning ("Action '" ++ redef ++ "' has already been defined")
   setActions uniques
-
-
-dedupeList :: String -> [String] -> SummaryM [String]
-dedupeList name items = do
-  let uniques = S.toList $ S.fromList items
-      redefs = items \\ uniques
-  forM_ redefs $ \redef -> addWarning (name ++ " '" ++ redef ++ "' has already been defined")
-  return uniques
 
 
 checkFinal :: SummaryM ()
@@ -77,7 +65,7 @@ checkStates = mapM_ checkState
 
 
 checkState :: State -> SummaryM ()
-checkState s@(State name entries exits internals ingoings outgoings) = do
+checkState s@(State name attrs entries exits internals ingoings outgoings) = do
   let exitEvents = (concatMap reactionEvents exits)
       entryEvents = (concatMap reactionEvents entries)
       internalEvents = (concatMap reactionEvents internals)
@@ -120,7 +108,7 @@ checkTransition t@(TSpec src dst trig guards reactions) = do
   case maybeSrcState of
     Nothing -> do
       report "State" "undefined - adding default" src
-      addState src (State src [] [] [] [] [t])
+      addState src (State src [] [] [] [] [] [t])
     Just (srcState) -> do
       let outgoings = stOutgoingTransitions srcState
       addState src srcState{stOutgoingTransitions=t:outgoings}
@@ -128,7 +116,7 @@ checkTransition t@(TSpec src dst trig guards reactions) = do
   case maybeDstState of
     Nothing -> do
       report "State" "undefined - adding default" dst
-      addState dst (State dst [] [] [] [t] [])
+      addState dst (State dst [] [] [] [] [t] [])
     Just (dstState) -> do
       let ingoings = stIngoingTransitions dstState
       addState dst dstState{stIngoingTransitions=t:ingoings}
@@ -234,7 +222,7 @@ addState n s = do
   setStateMap (M.insert n s sm)
 
 addDefaultState :: String -> SummaryM ()
-addDefaultState n = addState n (State n [] [] [] [] [])
+addDefaultState n = addState n (State n [] [] [] [] [] [])
 
 
 getTransitions :: SummaryM [TransitionSpec]

@@ -8,26 +8,10 @@ import qualified Data.IntMap.Strict as IM
 import qualified Data.Set as S
 
 
-data StateMachineError = SmUnknownEventError String
-                       | SmUnknownActionError String
-                       | SmUnknownStateError String
-                       | SmAmbiguityError State Event
-                       | SmNoTriggerError (Either State TransitionSpec)
-                       | SmCustomError String
-
-instance Show StateMachineError where
-  show (SmUnknownEventError s) = "Event " ++ s ++ " is not defined in the grammar file!"
-  show (SmUnknownActionError s) = "Action " ++ s ++ " is not defined in the grammar file!"
-  show (SmUnknownStateError s) = "State " ++ s ++ " is not defined in the grammar file!"
-  show (SmAmbiguityError s e) = "Ambiguous transition rules for state " ++ (stName s) ++ " for event " ++ e ++ "!"
-  show (SmNoTriggerError (Left s)) = "State " ++ (stName s) ++ " has an internal reaction without trigger!"
-  show (SmNoTriggerError (Right t)) = "Transition from state " ++ (tspecSrc t) ++ " to state " ++ (tspecDst t) ++ " without trigger!"
-  show (SmCustomError s) = s
-
-  showsPrec _ _ = id
-
 data StateMachine = SM
   { smName        :: String
+  , smStartState  :: String
+  , smFinalStates :: [String]
   , smEvents      :: [Event]
   , smActions     :: [Action]
   , smStates      :: M.Map String State
@@ -53,6 +37,27 @@ data GrammarSummary = GS
   , errors :: [String]
   } deriving (Show)
 
+data State = State
+  { stName                :: String
+  , stAttributes          :: [StateAttribute]
+  , stEntryReactions      :: [ReactionSpec]
+  , stExitReactions       :: [ReactionSpec]
+  , stInternalReactions   :: [ReactionSpec]
+  , stIngoingTransitions  :: [TransitionSpec]
+  , stOutgoingTransitions :: [TransitionSpec]
+  }
+
+instance Show State where
+  show State{..} = (init . unlines) $ stName : (concat [strAttrs, strEntries, strExits, strInternals, strIngoings, strOutgoings])
+    where
+      strAttrs = map (("  attributes: " ++) . show) stAttributes
+      strEntries = map (("  entry: " ++) . show) stEntryReactions
+      strExits = map (("  exit: " ++) . show) stExitReactions
+      strInternals = map (("  internal: " ++) . show) stInternalReactions
+      strIngoings = map (("  in: " ++) . show) stIngoingTransitions
+      strOutgoings = map (("  out: " ++) . show) stOutgoingTransitions
+  showsPrec _ r s = (show r) ++ s
+
 type Event  = String
 type Action = String
 type TFuncSpec = [Reaction]
@@ -72,24 +77,32 @@ data Operator = OpEQ
               | OpGE
               deriving (Show)
 
-data State = State
-  { stName                :: String
-  , stEntryReactions      :: [ReactionSpec]
-  , stExitReactions       :: [ReactionSpec]
-  , stInternalReactions   :: [ReactionSpec]
-  , stIngoingTransitions  :: [TransitionSpec]
-  , stOutgoingTransitions :: [TransitionSpec]
-  }
+data StateAttribute = StAInitial
+                    | StAFinal
+                    | ReactEntry [Reaction]
+                    | ReactExit [Reaction]
+                    | ReactInternal Event [Guard] [Reaction]
+                    deriving (Show)
 
-instance Show State where
-  show State{..} = (init . unlines) $ stName : (concat [strEntries, strExits, strInternals, strIngoings, strOutgoings])
-    where
-      strEntries = map (("  entry: " ++) . show) stEntryReactions
-      strExits = map (("  exit: " ++) . show) stExitReactions
-      strInternals = map (("  internal: " ++) . show) stInternalReactions
-      strIngoings = map (("  in: " ++) . show) stIngoingTransitions
-      strOutgoings = map (("  out: " ++) . show) stOutgoingTransitions
-  showsPrec _ r s = (show r) ++ s
+isInitial :: StateAttribute -> Bool
+isInitial StAInitial = True
+isInitial _          = False
+
+isFinal :: StateAttribute -> Bool
+isFinal StAFinal = True
+isFinal _        = False
+
+isEntry :: StateAttribute -> Bool
+isEntry (ReactEntry _) = True
+isEntry _              = False
+
+isExit :: StateAttribute -> Bool
+isExit (ReactExit _) = True
+isExit _             = False
+
+isInternal :: StateAttribute -> Bool
+isInternal (ReactInternal _ _ _) = True
+isInternal _                     = False
 
 data ReactionSpec = RSpec
   { rspecTrigger   :: Maybe Event
@@ -118,20 +131,3 @@ instance Show Reaction where
   show (ActionCall a) = a ++ "()"
   show (EventEmit e) = '^' : e
   showsPrec _ r s = (show r) ++ s
-
-data ReactionClassifier = ReactEntry [Reaction]
-                        | ReactExit [Reaction]
-                        | ReactInternal Event [Guard] [Reaction]
-                        deriving (Show)
-
-isEntry :: ReactionClassifier -> Bool
-isEntry (ReactEntry _) = True
-isEntry _              = False
-
-isExit :: ReactionClassifier -> Bool
-isExit (ReactExit _) = True
-isExit _             = False
-
-isInternal :: ReactionClassifier -> Bool
-isInternal (ReactInternal _ _ _) = True
-isInternal _                     = False

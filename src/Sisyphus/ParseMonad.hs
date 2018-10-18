@@ -1,11 +1,6 @@
-module Sisyphus.ParseMonad (
-        AlexInput, alexInputPrevChar, alexGetChar, alexGetByte,
-        AlexPosn(..), alexStartPos,
+module Sisyphus.ParseMonad
 
-        P, runP, failP, getInput, setInput, StartState(..),
-        setDefaultStartState, setExplicitStartState, getStartState,
-        StartCode, setStartCode, getStartCode
- ) where
+ where
 
 import Control.Applicative ( Applicative(..) )
 import Control.Monad ( liftM, ap )
@@ -71,9 +66,17 @@ data StartState a = NoStartState
                   | ExplicitStartState a
                   deriving (Show)
 
-data PState = PState { start_state :: StartState String
-                     , startcode   :: Int
-                     , input       :: AlexInput
+startStateToStr s = case s of
+  NoStartState -> ""
+  DefaultStartState str -> str
+  ExplicitStartState str -> str
+
+data PState = PState { start_state  :: StartState String
+                     , final_states :: [String]
+                     , startcode    :: Int
+                     , input        :: AlexInput
+                     , warnings     :: [String]
+                     , errors       :: [String]
                      }
 
 newtype P a = P { unP :: PState -> Either ParseError (PState,a) }
@@ -96,9 +99,12 @@ runP str (P p)
   = case p initial_state of
         Left err -> Left err
         Right (_,a) -> Right a
- where initial_state = PState{ start_state=NoStartState
+ where initial_state = PState{ start_state = NoStartState
+                             , final_states = []
                              , startcode = 0
-                             , input=(alexStartPos,'\n',[],str)
+                             , input = (alexStartPos,'\n',[],str)
+                             , warnings = []
+                             , errors = []
                              }
 
 failP :: String -> P a
@@ -113,6 +119,12 @@ setExplicitStartState state = P $ \s -> Right (s{ start_state = ExplicitStartSta
 getStartState :: P (StartState String)
 getStartState = P $ \s -> Right (s, start_state s)
 
+getFinalStates :: P [String]
+getFinalStates = P $ \s -> Right (s, final_states s)
+
+addFinalState :: String -> P ()
+addFinalState f = getFinalStates >>= (\fs -> P $ \s -> Right (s{ final_states = (f:fs)}, ()))
+
 setStartCode :: StartCode -> P ()
 setStartCode sc = P $ \s -> Right (s{ startcode = sc }, ())
 
@@ -124,3 +136,21 @@ getInput = P $ \s -> Right (s, input s)
 
 setInput :: AlexInput -> P ()
 setInput inp = P $ \s -> Right (s{ input = inp }, ())
+
+getWarnings :: P [String]
+getWarnings = P $ \s -> Right (s, warnings s)
+
+setWarnings :: [String] -> P ()
+setWarnings ws = P $ \s -> Right (s{ warnings = ws }, ())
+
+addWarning :: String -> P ()
+addWarning w = P $ \s -> Right (s{ warnings = w:(warnings s) }, ())
+
+getErrors :: P [String]
+getErrors = P $ \s -> Right (s, errors s)
+
+setErrors :: [String] -> P ()
+setErrors es = P $ \s -> Right (s{ errors = es }, ())
+
+addError :: String -> P ()
+addError e = P $ \s -> Right (s{ errors = e:(errors s) }, ())

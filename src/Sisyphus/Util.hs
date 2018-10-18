@@ -5,6 +5,8 @@ import Data.Word
 import Data.Bits
 import Data.Char
 import Data.Maybe
+import Data.List ((\\))
+import qualified Data.Set as S
 
 import Sisyphus.Types
 
@@ -31,36 +33,12 @@ encode = map fromIntegral . go . ord
                         ]
 
 
-str :: String -> String -> String
-str = showString
+dedupeList :: Ord a => [a] -> ([a],[a])
+dedupeList items =
+  let uniques = S.toList $ S.fromList items
+      redefs = items \\ uniques
+  in (redefs,uniques)
 
-char :: Char -> String -> String
-char c = (c :)
-
-nl :: String -> String
-nl = char '\n'
-
-nl2 :: String -> String
-nl2 = str "\n\n"
-
-nl3 :: String -> String
-nl3 = str "\n\n\n"
-
-enclose :: String -> String -> String -> String -> String
-enclose left right middle = str left . str middle . str right
-
-paren :: (String -> String) -> String -> String
-paren s = char '(' . s . char ')'
-
-brack :: (String -> String) -> String -> String
-brack s = char '[' . s . char ']'
-
-interleave_shows :: (String -> String) -> [String -> String] -> String -> String
-interleave_shows _ [] = id
-interleave_shows s xs = foldr1 (\a b -> a . s . b) xs
-
-space :: String -> String
-space = char ' '
 
 addIngoingTransition :: TransitionSpec -> State -> State
 addIngoingTransition t s =
@@ -68,6 +46,7 @@ addIngoingTransition t s =
     ins = stIngoingTransitions s
     s' = s{stIngoingTransitions=(t:ins)}
   in s'
+
 
 addOutgoingTransition :: TransitionSpec -> State -> State
 addOutgoingTransition t s =

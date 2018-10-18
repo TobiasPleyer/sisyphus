@@ -9,9 +9,8 @@ import System.Exit (exitFailure, exitSuccess, exitWith, ExitCode(..))
 import System.IO (stderr, hPutStr)
 
 import Sisyphus.Types
-import Sisyphus.ParseMonad
+import Sisyphus.ParseMonad hiding (errors, warnings)
 import Sisyphus.Parser
-import Sisyphus.Compile
 import Sisyphus.Targets (supportedTargets, renderTarget)
 
 
@@ -50,15 +49,14 @@ main = do
   opts <- cmdArgsRun options
   let file = head $ files opts
   sgf <- readFile file
-  sm <- case runP sgf parse of
+  smry <- case runP sgf parse of
     Left (Just (AlexPn _ line col),err) ->
             die (file ++ ":" ++ show line ++ ":" ++ show col
                              ++ ": " ++ err ++ "\n")
     Left (Nothing, err) ->
             die (file ++ ": " ++ err ++ "\n")
 
-    Right script -> return script
-  let smry = runChecks sm
+    Right grammarSummary -> return grammarSummary
   when (and [ not $ null $ warnings smry
             , not $ no_warnings opts
             , not $ warn_is_error opts]) $ do

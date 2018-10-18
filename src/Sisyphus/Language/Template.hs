@@ -40,7 +40,7 @@ mkContext sm@SM{..} = makeContextText contextLookup
                             ,("FSM_EVENTS", gVal_FSM_EVENTS)
                             ,("FSM_STATES", gVal_FSM_STATES)
                             ,("FSM_ACTIONS", gVal_FSM_ACTIONS)
-                            ,("FSM_START_STATE", toGVal (T.pack "Closed"))
+                            ,("FSM_START_STATE", gVal_FSM_START_STATE)
                             ,("FSM_STATE_MACHINE", toGVal sm)
                             ,("triggers", fromFunction triggers)
                             ]
@@ -48,6 +48,7 @@ mkContext sm@SM{..} = makeContextText contextLookup
     gVal_FSM_EVENTS  = toGVal $ smEvents
     gVal_FSM_STATES  = toGVal $ M.keys smStates
     gVal_FSM_ACTIONS = toGVal $ smActions
+    gVal_FSM_START_STATE = toGVal $ smStartState
     triggers args =
       let
         event = T.unpack (asText (snd (args !! 0)))
