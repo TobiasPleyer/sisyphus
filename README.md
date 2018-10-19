@@ -24,6 +24,39 @@ called Sisyphean tasks:
 Having my own experience with writing state machine code I thought that was a
 very funny metaphor, thus I stuck to the name Sisyphus.
 
+## Installation
+
+Sisyphus auto-generates its lexer and parser code. For this it uses the yacc
+style Haskell programs [Alex] and [Happy], thus these are dependencies for
+Sisyphus.
+
+Actually compiling the program can be done either with [Cabal] or the stack
+tool from the [Haskell Tool Stack]. Conveniently all of the above mentioned
+dependencies are included in the cross-platform [Haskell Platform]. Further
+you will need git or download a .zip if you want the sources.
+
+So the recommended way to install Sisyphus is to:
+
+1. Install the Haskell Platform
+2. Install git and clone the project or download the zipped package
+3. Type the following commands in the terminal in the projects root:
+
+```bash
+    alex -o src/Sisyphus/Lexer.hs specs/Lexer.x
+    happy -o src/Sisyphus/Parser.hs specs/Parser.y
+    stack build
+    stack install
+```
+
+After that the *sisyphus* program should be available. Type `sisyphus --help`
+for a test. You should see Sisyphus' help text printed.
+
+[Alex]: (https://www.haskell.org/alex/)
+[Happy]: (https://www.haskell.org/happy/)
+[Cabal]: (https://www.haskell.org/cabal/)
+[Haskell Tool Stack]: (https://docs.haskellstack.org/en/stable/README/)
+[Haskell Platform]: (https://docs.haskellstack.org/en/stable/README/)
+
 ## Goals
 
     - Simple
