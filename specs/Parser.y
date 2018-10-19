@@ -1,48 +1,56 @@
 {
-module Sisyphus.Parser (parse) where
+{-# OPTIONS_GHC -w #-}
+module Sisyphus.Parser (parse, P) where
 
+import Control.Monad (forM_, when)
+import Data.Char
 import qualified Data.Map.Strict as M
-import Control.Arrow ((&&&))
+import qualified Data.Set as S
 
-import Sisyphus.Types
+import Sisyphus.Compile hiding (getWarnings, getErrors, setWarnings, setErrors, addWarning, addError)
 import Sisyphus.Lexer
+import Sisyphus.ParseMonad hiding ( StartCode )
+import Sisyphus.Types
+import Sisyphus.Util (dedupeList)
 }
 
 %tokentype { Token }
 
 %name parse
-%error { parseError }
+
+%monad { P } { (>>=) } { return }
+%lexer { lexer } { T _ EOFT }
 
 %token
-    ';'          { SpecialT ';'   }
-    ','          { SpecialT ','   }
-    '|'          { SpecialT '|'   }
-    '{'          { SpecialT '{'   }
-    '}'          { SpecialT '}'   }
-    '['          { SpecialT '['   }
-    ']'          { SpecialT ']'   }
-    '/'          { SpecialT '/'   }
-    '^'          { SpecialT '^'   }
-    '@'          { SpecialT '@'   }
-    '!'          { SpecialT '!'   }
-    '='          { SpecialT '='   }
-    '<'          { SpecialT '<'   }
-    '>'          { SpecialT '>'   }
-    ARROW        { ArrowT         }
-    NAME         { NameT          }
-    EVENTS       { EventsT        }
-    ACTIONS      { ActionsT       }
-    STATES       { StatesT        }
-    TRANSITIONS  { TransitionsT   }
-    ENTRY        { EntryT         }
-    EXIT         { ExitT          }
-    INTERNAL     { InternalT      }
-    ID           { IdT $$         }
-    NUM          { NumT $$        }
+    ';'          { T _ (SpecialT ';' ) }
+    ','          { T _ (SpecialT ',' ) }
+    '|'          { T _ (SpecialT '|' ) }
+    '{'          { T _ (SpecialT '{' ) }
+    '}'          { T _ (SpecialT '}' ) }
+    '['          { T _ (SpecialT '[' ) }
+    ']'          { T _ (SpecialT ']' ) }
+    '/'          { T _ (SpecialT '/' ) }
+    '^'          { T _ (SpecialT '^' ) }
+    '@'          { T _ (SpecialT '@' ) }
+    '!'          { T _ (SpecialT '!' ) }
+    '='          { T _ (SpecialT '=' ) }
+    '<'          { T _ (SpecialT '<' ) }
+    '>'          { T _ (SpecialT '>' ) }
+    ARROW        { T _ (ArrowT       ) }
+    NAME         { T _ (NameT        ) }
+    EVENTS       { T _ (EventsT      ) }
+    ACTIONS      { T _ (ActionsT     ) }
+    STATES       { T _ (StatesT      ) }
+    TRANSITIONS  { T _ (TransitionsT ) }
+    ENTRY        { T _ (EntryT       ) }
+    EXIT         { T _ (ExitT        ) }
+    INTERNAL     { T _ (InternalT    ) }
+    ID           { T _ (IdT $$       ) }
+    NUM          { T _ (NumT $$      ) }
 
 %%
 
-sisyphus : name events actions states transitions { SM $1 $2 $3 $4 $5 }
+sisyphus : name events actions states transitions {% mkSummary $1 $2 $3 $4 $5 }
 
 name : NAME ID     { $2 }
      | {- empty -} { "FSM" }
@@ -60,10 +68,10 @@ action_specifiers : action_specifier                   { [$1] }
 action_specifier : ID ';'                              { $1 }
 
 states : {- empty -}                                { M.empty }
-       | STATES state_specifiers                    { M.fromList $ map (stName &&& id) $2 }
+       | STATES state_specifiers                    {% mkStateMap $2 }
 state_specifiers : state_specifier                  { [$1] }
                  | state_specifiers state_specifier { $2 : $1 }
-state_specifier : ID state_attribute_list           { mkState $1 $2 }
+state_specifier : ID state_attribute_list           {% mkState $1 $2 }
 
 state_attribute_list : ';'                              { [] }
                      | '{' state_attributes '}'         { $2 }
@@ -73,6 +81,7 @@ state_attributes : {- empty -}                          { [] }
 state_attribute : ENTRY reactions                       { ReactEntry $2 }
                 | EXIT reactions                        { ReactExit $2 }
                 | INTERNAL ID guards '/' reactions      { ReactInternal $2 $3 $5 }
+                | ID                                    {% id2Attr $1 }
 
 reactions : {- empty -}        { [] }
           | reactions reaction { $2 : $1 }
@@ -111,21 +120,64 @@ guard_test : '!' ID          { NotG $2 }
            | ID              { G $1 }
 
 {
+happyError :: P a
+happyError = failP "parse error"
 
-mkState name attrs =
+mkSummary :: String
+          -> [String]
+          -> [String]
+          -> (M.Map String State)
+          -> [TransitionSpec]
+          -> P GrammarSummary
+mkSummary n es as ss ts = do
+  startState <- startStateToStr <$> getStartState
+  finalStates <- getFinalStates
+  warnings <- getWarnings
+  errors <- getErrors
+  let
+    stateNames = M.keys ss
+    stateMachine = SM n startState finalStates es as ss ts
+  return $ runChecks $ GS stateMachine S.empty S.empty (S.fromList stateNames) (S.fromList stateNames) warnings errors
+
+mkStateMap :: [State] -> P (M.Map String State)
+mkStateMap states = do
+  let states' = reverse states
+      names = map stName states'
+  setDefaultStartState (head names)
+  let (redefs,uniques) = dedupeList names
+  forM_ redefs $ \redef -> addError ("State '" ++ redef ++ "' has already been defined")
+  forM_ states' $ \s -> do
+    when (any isInitial (stAttributes s)) $ do
+      startState <- getStartState
+      case startState of
+        NoStartState -> setExplicitStartState (stName s)
+        DefaultStartState _ -> setExplicitStartState (stName s)
+        ExplicitStartState s' -> addError ("State '" ++ (stName s) ++ "' cannot be declared as initial state, '"
+                                           ++ s' ++ "' was already declared as initial state")
+    when (any isFinal (stAttributes s)) $ addFinalState (stName s)
+  return $ M.fromList $ zip names states'
+
+mkState :: String -> [StateAttribute] -> P State
+mkState name attrs = do
   let
     entries = filter isEntry attrs
     exits = filter isExit attrs
     internals = filter isInternal attrs
+    otherAttrs = filter (\attr -> and (map (not . ($ attr)) [isEntry, isExit, isInternal])) attrs
     allEntries = map (\(ReactEntry rs) -> RSpec Nothing [] rs) entries
     allExits = map (\(ReactExit rs) -> RSpec Nothing [] rs) exits
     allInternals = map (\(ReactInternal trig gs rs) -> RSpec (Just trig) gs rs) internals
-  in
-    State name allEntries allExits allInternals [] []
+  return $ State name otherAttrs allEntries allExits allInternals [] []
 
 mkTransition (Nothing,(t,gs,rs)) = (Nothing,Nothing,Just t,gs,rs)
 mkTransition (Just (Nothing,dst),(t,gs,rs)) = (Nothing,Just dst,Just t,gs,rs)
 mkTransition (Just (Just src,dst),(t,gs,rs)) = (Just src,Just dst,Just t,gs,rs)
+
+id2Attr :: String -> P StateAttribute
+id2Attr str
+    | str == "initial" = return StAInitial
+    | str == "final"   = return StAFinal
+    | otherwise        = failP "Bad attribute error"
 
 {-
 In grammar files it is possible to leave out source and destination if they are

@@ -5,13 +5,20 @@ module Main where
 import Control.Monad (forM_, when)
 import System.Console.CmdArgs
 import System.FilePath
-import System.Exit (exitFailure, exitSuccess)
+import System.Exit (exitFailure, exitSuccess, exitWith, ExitCode(..))
+import System.IO (stderr, hPutStr)
 
-import Sisyphus.Lexer (tokenize)
-import Sisyphus.Parser (parse)
 import Sisyphus.Types
-import Sisyphus.Compile
+import Sisyphus.ParseMonad hiding (errors, warnings)
+import Sisyphus.Parser
 import Sisyphus.Targets (supportedTargets, renderTarget)
+
+
+bye :: String -> IO a
+bye s = putStr s >> exitWith ExitSuccess
+
+die :: String -> IO a
+die s = hPutStr stderr s >> exitWith (ExitFailure 1)
 
 
 data Options = Options
@@ -40,9 +47,16 @@ options = cmdArgsMode $ Options
 main :: IO ()
 main = do
   opts <- cmdArgsRun options
-  sgf <- readFile $ head $ files opts
-  let sm = parse $ tokenize sgf
-  let smry = runChecks sm
+  let file = head $ files opts
+  sgf <- readFile file
+  smry <- case runP sgf parse of
+    Left (Just (AlexPn _ line col),err) ->
+            die (file ++ ":" ++ show line ++ ":" ++ show col
+                             ++ ": " ++ err ++ "\n")
+    Left (Nothing, err) ->
+            die (file ++ ": " ++ err ++ "\n")
+
+    Right grammarSummary -> return grammarSummary
   when (and [ not $ null $ warnings smry
             , not $ no_warnings opts
             , not $ warn_is_error opts]) $ do
