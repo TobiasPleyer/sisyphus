@@ -36,8 +36,8 @@ Actually compiling the program can be done either with
 [Haskell Tool Stack](https://docs.haskellstack.org/en/stable/README/).
 Conveniently all of the above mentioned dependencies are included in the
 cross-platform
-[Haskell Platform](https://docs.haskellstack.org/en/stable/README/). Further
-you will need git or download a .zip if you want the sources.
+[Haskell Platform](https://www.haskell.org/platform/). Further you will need
+git or download a .zip if you want the sources.
 
 So the recommended way to install Sisyphus is to:
 
