@@ -71,7 +71,7 @@ states : {- empty -}                                { M.empty }
        | STATES state_specifiers                    {% mkStateMap $2 }
 state_specifiers : state_specifier                  { [$1] }
                  | state_specifiers state_specifier { $2 : $1 }
-state_specifier : ID state_attribute_list           {% mkState $1 $2 }
+state_specifier : ID state_attribute_list           { mkState $1 $2 }
 
 state_attribute_list : ';'                              { [] }
                      | '{' state_attributes '}'         { $2 }
@@ -137,7 +137,7 @@ mkSummary n es as ss ts = do
   let
     stateNames = M.keys ss
     stateMachine = SM n startState finalStates es as ss ts
-  return $ runChecks $ GS stateMachine S.empty S.empty (S.fromList stateNames) (S.fromList stateNames) warnings errors
+  return $ runChecks $ GS stateMachine (S.fromList es) (S.fromList as) (S.fromList stateNames) (S.fromList stateNames) warnings errors
 
 mkStateMap :: [State] -> P (M.Map String State)
 mkStateMap states = do
@@ -157,8 +157,8 @@ mkStateMap states = do
     when (any isFinal (stAttributes s)) $ addFinalState (stName s)
   return $ M.fromList $ zip names states'
 
-mkState :: String -> [StateAttribute] -> P State
-mkState name attrs = do
+mkState :: String -> [StateAttribute] -> State
+mkState name attrs =
   let
     entries = filter isEntry attrs
     exits = filter isExit attrs
@@ -167,7 +167,7 @@ mkState name attrs = do
     allEntries = map (\(ReactEntry rs) -> RSpec Nothing [] rs) entries
     allExits = map (\(ReactExit rs) -> RSpec Nothing [] rs) exits
     allInternals = map (\(ReactInternal trig gs rs) -> RSpec (Just trig) gs rs) internals
-  return $ State name otherAttrs allEntries allExits allInternals [] []
+  in State name otherAttrs allEntries allExits allInternals [] []
 
 mkTransition (Nothing,(t,gs,rs)) = (Nothing,Nothing,Just t,gs,rs)
 mkTransition (Just (Nothing,dst),(t,gs,rs)) = (Nothing,Just dst,Just t,gs,rs)
