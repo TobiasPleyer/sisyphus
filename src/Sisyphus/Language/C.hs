@@ -130,7 +130,7 @@ emitTransitionsSt sm name s = do
   forM_ (stInternalReactions s) $ \i -> do
     let
       trigger = maybe "" T.pack (rspecTrigger i)
-    yield $ "void " <> name <> "_" <> (T.pack (stName s)) <> "__on_" <> trigger <> "(pSM)\n{\n"
+    yield $ "void " <> name <> "_" <> (T.pack (stName s)) <> "__on_" <> trigger <> "(" <> name <> "_t* pSM)\n{\n"
     forM_ (rspecReactions i) $ \r -> do
       case r of
         ActionCall a -> yield $ "\t" <> (T.pack a) <> "();\n"
