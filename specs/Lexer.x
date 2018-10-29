@@ -17,21 +17,21 @@ $idchar   = [$alphanum \_]
 
 $special  = [\^\.\:\;\,\$\@\|\*\+\?\~\-\{\}\(\)\[\]\/\<\>\=\!]
 
-@id       = $alpha $idchar*
-@num      = $digit+
-@comment  = "#".*
+@id         = $alpha $idchar*
+@num        = $digit+
+@comment    = "#".*
+@arrow      = "-"+">"
+@regionLine = "-"+"-"
 
 tokens :-
 
 <0> $white+                    { skip     }
 <0> @comment                   { skip     }
-<0> "->"                       { arrow    }
+<0> @arrow                     { arr      }
+<0> @regionLine                { region   }
+<0> "[*]"                      { star     }
 <0> $special                   { special  }
-<0> \% "name"                  { name     }
-<0> \% "events"                { events   }
-<0> \% "actions"               { actions  }
-<0> \% "states"                { states   }
-<0> \% "transitions"           { trans    }
+<0> "state"                    { state    }
 <0> "entry" \:                 { entry    }
 <0> "exit" \:                  { exit     }
 <0> "internal" \:              { internal }
@@ -50,12 +50,12 @@ tokPosn (T p _) = p
 
 data Tkn
   = SpecialT Char
+  | StartUmlT
+  | EndUmlT
   | ArrowT
-  | NameT
-  | EventsT
-  | ActionsT
-  | StatesT
-  | TransitionsT
+  | StarStateT
+  | RegionLineT
+  | StateT
   | EntryT
   | ExitT
   | InternalT
@@ -67,16 +67,18 @@ data Tkn
 -- -----------------------------------------------------------------------------
 -- Token functions
 
-special, arrow, name, events, actions, states, trans, entry :: Action
-exit, internal, ident, number :: Action
+type Action = (AlexPosn,Char,String) -> Int -> P Token
+
+special, startUml, endUml, arr, star, region, state :: Action
+entry, exit, internal, ident, number :: Action
 
 special   (p,_,str) _  = return $ T p (SpecialT  (head str))
-arrow     (p,_,_)   _  = return $ T p ArrowT
-name      (p,_,_)   _  = return $ T p NameT
-events    (p,_,_)   _  = return $ T p EventsT
-actions   (p,_,_)   _  = return $ T p ActionsT
-states    (p,_,_)   _  = return $ T p StatesT
-trans     (p,_,_)   _  = return $ T p TransitionsT
+startUml  (p,_,_)   _  = return $ T p StartUmlT
+endUml    (p,_,_)   _  = return $ T p EndUmlT
+arr       (p,_,_)   _  = return $ T p ArrowT
+star      (p,_,_)   _  = return $ T p StarStateT
+region    (p,_,_)   _  = return $ T p RegionLineT
+state     (p,_,_)   _  = return $ T p StateT
 entry     (p,_,_)   _  = return $ T p EntryT
 exit      (p,_,_)   _  = return $ T p ExitT
 internal  (p,_,_)   _  = return $ T p InternalT
@@ -107,8 +109,6 @@ lexToken = do
     AlexToken inp1 len t -> do
       setInput inp1
       t (p,c,s) len
-
-type Action = (AlexPosn,Char,String) -> Int -> P Token
 
 skip :: Action
 skip _ _ = lexToken

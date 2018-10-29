@@ -1,11 +1,12 @@
 module Sisyphus.ParseMonad
 
- where
+where
 
 import Control.Applicative ( Applicative(..) )
 import Control.Monad ( liftM, ap )
 import Data.Word (Word8)
 import qualified Sisyphus.Util as Util
+import Sisyphus.SisSyn
 
 -- -----------------------------------------------------------------------------
 -- The input type
@@ -61,20 +62,10 @@ alexMove (AlexPn a l c) _    = AlexPn (a+1)  l    (c+1)
 type ParseError = (Maybe AlexPosn, String)
 type StartCode = Int
 
-data StartState a = NoStartState
-                  | DefaultStartState a
-                  | ExplicitStartState a
-                  deriving (Show)
-
-startStateToStr s = case s of
-  NoStartState -> ""
-  DefaultStartState str -> str
-  ExplicitStartState str -> str
-
-data PState = PState { start_state  :: StartState String
-                     , final_states :: [String]
-                     , startcode    :: Int
+data PState = PState { startcode    :: Int
                      , input        :: AlexInput
+                     , scope        :: [String]
+                     , transitions  :: [SisTransition String]
                      , warnings     :: [String]
                      , errors       :: [String]
                      }
@@ -99,10 +90,10 @@ runP str (P p)
   = case p initial_state of
         Left err -> Left err
         Right (_,a) -> Right a
- where initial_state = PState{ start_state = NoStartState
-                             , final_states = []
-                             , startcode = 0
+ where initial_state = PState{ startcode = 0
                              , input = (alexStartPos,'\n',[],str)
+                             , scope = []
+                             , transitions = []
                              , warnings = []
                              , errors = []
                              }
@@ -110,20 +101,23 @@ runP str (P p)
 failP :: String -> P a
 failP str = P $ \PState{ input = (p,_,_,_) } -> Left (Just p,str)
 
-setDefaultStartState :: String -> P ()
-setDefaultStartState state = P $ \s -> Right (s{ start_state = DefaultStartState state }, ())
+getScope :: P [String]
+getScope = P $ \st -> Right (st, scope st)
 
-setExplicitStartState :: String -> P ()
-setExplicitStartState state = P $ \s -> Right (s{ start_state = ExplicitStartState state }, ())
+setScope :: [String] -> P ()
+setScope sc = P $ \st -> Right (st{ scope = sc }, ())
 
-getStartState :: P (StartState String)
-getStartState = P $ \s -> Right (s, start_state s)
+pushScope :: String -> P ()
+pushScope s = P $ \st -> Right (st{ scope = s:(scope st) }, ())
 
-getFinalStates :: P [String]
-getFinalStates = P $ \s -> Right (s, final_states s)
-
-addFinalState :: String -> P ()
-addFinalState f = getFinalStates >>= (\fs -> P $ \s -> Right (s{ final_states = (f:fs)}, ()))
+popScope :: P String
+popScope = do
+  sc <- getScope
+  case sc of
+    [] -> failP "Popping from empty scope stack!"
+    s:sc' -> do
+      setScope sc'
+      return s
 
 setStartCode :: StartCode -> P ()
 setStartCode sc = P $ \s -> Right (s{ startcode = sc }, ())
@@ -137,20 +131,29 @@ getInput = P $ \s -> Right (s, input s)
 setInput :: AlexInput -> P ()
 setInput inp = P $ \s -> Right (s{ input = inp }, ())
 
+getTransitions :: P [SisTransition String]
+getTransitions = P $ \st -> Right (st, transitions st)
+
+setTransitions :: [SisTransition String] -> P ()
+setTransitions ts = P $ \st -> Right (st{ transitions = ts }, ())
+
+addTransition :: (SisTransition String) -> P ()
+addTransition t = P $ \st -> Right (st{ transitions = t:(transitions st) }, ())
+
 getWarnings :: P [String]
-getWarnings = P $ \s -> Right (s, warnings s)
+getWarnings = P $ \st -> Right (st, warnings st)
 
 setWarnings :: [String] -> P ()
-setWarnings ws = P $ \s -> Right (s{ warnings = ws }, ())
+setWarnings ws = P $ \st -> Right (st{ warnings = ws }, ())
 
 addWarning :: String -> P ()
-addWarning w = P $ \s -> Right (s{ warnings = w:(warnings s) }, ())
+addWarning w = P $ \st -> Right (st{ warnings = w:(warnings st) }, ())
 
 getErrors :: P [String]
-getErrors = P $ \s -> Right (s, errors s)
+getErrors = P $ \st -> Right (st, errors st)
 
 setErrors :: [String] -> P ()
-setErrors es = P $ \s -> Right (s{ errors = es }, ())
+setErrors es = P $ \st -> Right (st{ errors = es }, ())
 
 addError :: String -> P ()
-addError e = P $ \s -> Right (s{ errors = e:(errors s) }, ())
+addError e = P $ \st -> Right (st{ errors = e:(errors st) }, ())

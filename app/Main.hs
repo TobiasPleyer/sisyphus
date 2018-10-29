@@ -56,27 +56,28 @@ main = do
     Left (Nothing, err) ->
             die (file ++ ": " ++ err ++ "\n")
 
-    Right grammarSummary -> return grammarSummary
-  when (and [ not $ null $ warnings smry
-            , not $ no_warnings opts
-            , not $ warn_is_error opts]) $ do
-    putStrLn "== Warnings =="
-    forM_ (warnings smry) putStrLn
-  -- This is the final summary after the command line flags have been evaluated
-  let summary = if (warn_is_error opts)
-                 then
-                   let errors' = (warnings smry) ++ (errors smry)
-                   in smry{errors=errors'}
-                 else smry
-  when (not $ null $ errors summary) $ do
-    putStrLn "The following errors prevent further processing:"
-    putStrLn "== Errors =="
-    forM_ (errors summary) putStrLn
-    exitFailure
-  -- This is the state machine after the checks have been run
-  let statemachine = stateMachine summary
-  forM_ (targets opts) $ renderTarget statemachine (outputdir opts)
-  when (print_statemachine opts) $
-    print statemachine
-  print "Done"
-  exitSuccess
+    Right p -> return p
+  print smry
+--when (and [ not $ null $ warnings smry
+--          , not $ no_warnings opts
+--          , not $ warn_is_error opts]) $ do
+--  putStrLn "== Warnings =="
+--  forM_ (warnings smry) putStrLn
+---- This is the final summary after the command line flags have been evaluated
+--let summary = if (warn_is_error opts)
+--               then
+--                 let errors' = (warnings smry) ++ (errors smry)
+--                 in smry{errors=errors'}
+--               else smry
+--when (not $ null $ errors summary) $ do
+--  putStrLn "The following errors prevent further processing:"
+--  putStrLn "== Errors =="
+--  forM_ (errors summary) putStrLn
+--  exitFailure
+---- This is the state machine after the checks have been run
+--let statemachine = stateMachine summary
+--forM_ (targets opts) $ renderTarget statemachine (outputdir opts)
+--when (print_statemachine opts) $
+--  print statemachine
+--print "Done"
+--exitSuccess
