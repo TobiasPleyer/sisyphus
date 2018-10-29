@@ -2,9 +2,6 @@
 module Sisyphus.SisSyn where
 
 
-type Event  = String
-type Action = String
-
 data Guard = G String
            | NotG String
            | BinOpG Operator Var Var
@@ -24,8 +21,8 @@ data Operator = OpEQ
 
 data SisStateMachine a = SSM {
     ssmName :: String
-  , ssmEvents :: [Event]
-  , ssmActions :: [Action]
+  , ssmEvents :: [String]
+  , ssmActions :: [String]
   , ssmRegions :: [SisRegion a]
   , ssmTransitions :: [SisTransition a]
 }

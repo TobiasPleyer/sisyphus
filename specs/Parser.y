@@ -6,7 +6,6 @@ import Control.Monad (forM_, when)
 import Data.Char
 
 import Sisyphus.Lexer
-import Sisyphus.ParseMonad hiding ( StartCode )
 }
 
 %tokentype { Token }
@@ -41,7 +40,7 @@ import Sisyphus.ParseMonad hiding ( StartCode )
 
 %%
 
-sisyphus : ID ARROW ID { ($1,$3) }
+sisyphus : STATE ID { $2 }
 
 {
 happyError :: P a

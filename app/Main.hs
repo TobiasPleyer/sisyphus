@@ -9,7 +9,7 @@ import System.Exit (exitFailure, exitSuccess, exitWith, ExitCode(..))
 import System.IO (stderr, hPutStr)
 
 import Sisyphus.Types
-import Sisyphus.ParseMonad hiding (errors, warnings)
+import Sisyphus.Lexer
 import Sisyphus.Parser
 import Sisyphus.Targets (supportedTargets, renderTarget)
 
@@ -48,16 +48,16 @@ main :: IO ()
 main = do
   opts <- cmdArgsRun options
   let file = head $ files opts
-  sgf <- readFile file
-  smry <- case runP sgf parse of
+  str <- readFile file
+  tkns <- case runP str tokenize of
     Left (Just (AlexPn _ line col),err) ->
             die (file ++ ":" ++ show line ++ ":" ++ show col
                              ++ ": " ++ err ++ "\n")
     Left (Nothing, err) ->
             die (file ++ ": " ++ err ++ "\n")
 
-    Right p -> return p
-  print smry
+    Right ts -> return ts
+  print tkns
 --when (and [ not $ null $ warnings smry
 --          , not $ no_warnings opts
 --          , not $ warn_is_error opts]) $ do
