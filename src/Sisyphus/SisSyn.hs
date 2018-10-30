@@ -25,45 +25,46 @@ data SisStateMachine a = SSM {
   , ssmActions :: [String]
   , ssmRegions :: [SisRegion a]
   , ssmTransitions :: [SisTransition a]
-}
+  }
+  deriving (Show)
 
 data SisRegion a = SR {
     srName :: Maybe a
+  , srIndex :: !Int
   , srVertices :: [SisState a]
   , srInitial :: Maybe a
   , srFinals :: [a]
-}
+  }
+  deriving (Show)
 
 data SisState a =
-  SSKSimple {
-    sskSimpleName :: a
-  , sskSimpleIndex :: !Int
-  , sskSimpleBehaviours :: [SisBehavior]
+  STNormal {
+    stnName :: a
+  , stnIndex :: !Int
+  , stnBehaviours :: [SisBehavior]
+  , stnRegions :: [SisRegion a]
   }
   |
-  SSKComposite {
-    sskCompositeName :: a
-  , sskCompositeIndex :: !Int
-  , sskCompositeBehaviours :: [SisBehavior]
-  , sskCompositeRegions :: [SisRegion a]
-  }
+  STSubmachine
   |
-  SSKSubmachine
-  |
-  SSKPseudo SisPseudoState
+  STPseudo SisPseudoState
+  deriving (Show)
 
 data SisBehavior = SBEntry [SisEffect]
                  | SBExit [SisEffect]
                  | SBDoActivity [SisEffect]
+                 deriving (Show)
 
 data SisEffect = SE {
     seKind :: SisEffectKind
   , seName :: String
-}
+  }
+  deriving (Show)
 
 data SisEffectKind = SEKEvent
                    | SEKAction
                    | SEKDoCall
+                   deriving (Show)
 
 data SisPseudoState = SPSInitial
                     | SPSFinal
@@ -75,17 +76,20 @@ data SisPseudoState = SPSInitial
                     | SPSDeepHistory
                     | SPSEntryPoint
                     | SPSExitPoint
+                    deriving (Show)
 
 data SisTransition a =
   ST {
     stKind :: SisTransitionKind
   , stTriggers :: [String]
-  , stGuard :: Guard
-  , stBehaviors :: [SisBehavior]
+  , stGuard :: Maybe Guard
+  , stBehaviors :: [SisEffect]
   , stSrc :: a
   , stDst :: a
   }
+  deriving (Show)
 
 data SisTransitionKind = STKInternal
                        | STKExternal
                        | STKLocal
+                       deriving (Eq,Show)

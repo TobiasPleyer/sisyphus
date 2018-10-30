@@ -29,7 +29,10 @@ $special  = [\^\.\:\;\,\$\@\|\*\+\?\~\-\{\}\(\)\[\]\/\<\>\=\!]
 @num        = $digit+
 @comment    = "#".*
 @arrow      = "-"+">"
-@regionLine = "-"+"-"
+@regionSep  = "-"+"-" | "|"+"|"
+@entry      = "<" "e" "ntry"? ">"
+@exit       = "<" "e"? "x" "it"? ">"
+@internal   = "<" "i" "nternal"? ">"
 
 tokens :-
 
@@ -37,15 +40,15 @@ $white_no_nl+              { skip      }
 $nl                        { vSemi     }
 @comment                   { skip      }
 @arrow                     { arr       }
-@regionLine                { region    }
+@regionSep                 { region    }
 "[*]"                      { star      }
 "@startuml"                { startUml  }
 "@enduml"                  { endUml    }
 $special                   { special   }
 "state"                    { state     }
-"entry" \:                 { entry     }
-"exit" \:                  { exit      }
-"internal" \:              { internal  }
+@entry                     { entry     }
+@exit                      { exit      }
+@internal                  { internal  }
 @id                        { ident     }
 @num                       { number    }
 
@@ -66,7 +69,7 @@ data Tkn
   | EndUmlT
   | ArrowT
   | StarStateT
-  | RegionLineT
+  | RegionSepT
   | StateT
   | EntryT
   | ExitT
@@ -90,7 +93,7 @@ startUml  (p,_,_)   _  = return $ T p StartUmlT
 endUml    (p,_,_)   _  = return $ T p EndUmlT
 arr       (p,_,_)   _  = return $ T p ArrowT
 star      (p,_,_)   _  = return $ T p StarStateT
-region    (p,_,_)   _  = return $ T p RegionLineT
+region    (p,_,_)   _  = return $ T p RegionSepT
 state     (p,_,_)   _  = return $ T p StateT
 entry     (p,_,_)   _  = return $ T p EntryT
 exit      (p,_,_)   _  = return $ T p ExitT
@@ -99,11 +102,14 @@ ident     (p,_,str) ln = return $ T p (IdT (take ln str))
 number    (p,_,str) ln = return $ T p (NumT (take ln str))
 vSemi     (p,_,_)   _  = do pTkn <- getPrevToken
                             case pTkn of
-                              SpecialT _ -> lexToken
-                              RegionLineT -> lexToken
-                              StartUmlT -> lexToken
-                              EndUmlT -> lexToken
-                              _ -> return $ T p VirtualSemiColonT
+                              StarStateT -> return $ T p VirtualSemiColonT
+                              IdT _ -> return $ T p VirtualSemiColonT
+                              NumT _ -> return $ T p VirtualSemiColonT
+                              SpecialT c -> case c of
+                                              ']' -> return $ T p VirtualSemiColonT
+                                              '/' -> return $ T p VirtualSemiColonT
+                                              _   -> lexToken
+                              _ -> lexToken
 
 skip :: Action
 skip _ _ = lexToken
@@ -165,6 +171,7 @@ type StartCode = Int
 data PState = PState { startcode    :: Int
                      , input        :: AlexInput
                      , prevToken    :: Tkn
+                     , smIndex      :: !Int
                      , scope        :: [String]
                      , transitions  :: [SisTransition String]
                      , warnings     :: [String]
@@ -194,6 +201,7 @@ runP str (P p)
  where initial_state = PState{ startcode = 0
                              , input = (alexStartPos,'\n',[],str)
                              , prevToken = NoneT
+                             , smIndex = 0
                              , scope = []
                              , transitions = []
                              , warnings = []
@@ -203,11 +211,29 @@ runP str (P p)
 failP :: String -> P a
 failP str = P $ \PState{ input = (p,_,_,_) } -> Left (Just p,str)
 
+setStartCode :: StartCode -> P ()
+setStartCode sc = P $ \s -> Right (s{ startcode = sc }, ())
+
+getStartCode :: P StartCode
+getStartCode = P $ \s -> Right (s, startcode s)
+
+getInput :: P AlexInput
+getInput = P $ \s -> Right (s, input s)
+
+setInput :: AlexInput -> P ()
+setInput inp = P $ \s -> Right (s{ input = inp }, ())
+
 getPrevToken :: P Tkn
 getPrevToken = P $ \st -> Right (st, prevToken st)
 
 setPrevToken :: Tkn -> P ()
 setPrevToken t = P $ \st -> Right (st{ prevToken = t }, ())
+
+getSmIndex :: P Int
+getSmIndex = P $ \st -> Right (st, smIndex st)
+
+incSmIndex :: P ()
+incSmIndex = P $ \st -> Right (st{ smIndex = (smIndex st) + 1 }, ())
 
 getScope :: P [String]
 getScope = P $ \st -> Right (st, scope st)
@@ -226,18 +252,6 @@ popScope = do
     s:sc' -> do
       setScope sc'
       return s
-
-setStartCode :: StartCode -> P ()
-setStartCode sc = P $ \s -> Right (s{ startcode = sc }, ())
-
-getStartCode :: P StartCode
-getStartCode = P $ \s -> Right (s, startcode s)
-
-getInput :: P AlexInput
-getInput = P $ \s -> Right (s, input s)
-
-setInput :: AlexInput -> P ()
-setInput inp = P $ \s -> Right (s{ input = inp }, ())
 
 getTransitions :: P [SisTransition String]
 getTransitions = P $ \st -> Right (st, transitions st)

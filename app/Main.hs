@@ -58,6 +58,15 @@ main = do
 
     Right ts -> return ts
   print tkns
+  sm <- case runP str parse of
+    Left (Just (AlexPn _ line col),err) ->
+            die (file ++ ":" ++ show line ++ ":" ++ show col
+                             ++ ": " ++ err ++ "\n")
+    Left (Nothing, err) ->
+            die (file ++ ": " ++ err ++ "\n")
+
+    Right p -> return p
+  print sm
 --when (and [ not $ null $ warnings smry
 --          , not $ no_warnings opts
 --          , not $ warn_is_error opts]) $ do
