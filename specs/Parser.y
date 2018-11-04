@@ -70,14 +70,8 @@ decl :: { RdrDecl }
     | transition  { $1 }
 
 state :: { RdrDecl }
-    : STATE ID semi  {% mkStateDecl $2 [] }
-    | state_block_open regions state_block_close  {% mkStateDecl $1 $2 }
-
-state_block_open :: { String }
-    : STATE ID '{'  {% do {pushScope $2; return $2} }
-
-state_block_close :: { String }
-    : '}'  {% popScope }
+    : STATE ID semi             { StateDecl $2 [] }
+    | STATE ID '{' regions '}'  { StateDecl $2 $4 }
 
 regions :: { [[RdrDecl]] }
     : decls regions1  { $1 : $2 }
@@ -118,32 +112,15 @@ action : '@' ID { SE SEKAction $2 }
 
 {
 
-data RdrDecl = StateDecl (SisState String)
+data RdrDecl = StateDecl String [[RdrDecl]]
              | BehaviorDecl String SisBehavior
              | TransDecl (SisTransition String)
              deriving (Show)
 
-mkStateDecl :: String -> [[RdrDecl]] -> P RdrDecl
-mkStateDecl name regionDecls = do
-    index <- newSmIndex
-    regions <- mapM evalRegionDecl regionDecls
-    return $ StateDecl $ STNormal name index [] regions
-
 mkTransDecl kind src dst (trig,guard,effs) = TransDecl $ ST kind [trig] guard effs src dst
 
-evalRegionDecl :: [RdrDecl] -> P (SisRegion String)
-evalRegionDecl declarations = do
-    currentScope <- getScope
-    let
-        transitions = map (\(TransDecl t) -> t) $ filter isTransDecl declarations
-        behaviors = map (\(BehaviorDecl n b) -> (n,b)) $ filter isBehaviorDecl declarations
-        states = map (\(StateDecl s) -> s) $ filter isStateDecl declarations
-    forM_ transitions (addTransition currentScope)
-    forM_ behaviors (\(n,b) -> addBehavior (n:currentScope) b)
-    return $ SR Nothing 0 states Nothing []
-
 isStateDecl :: RdrDecl -> Bool
-isStateDecl (StateDecl _) = True
+isStateDecl (StateDecl _ _) = True
 isStateDecl _ = False
 
 isBehaviorDecl :: RdrDecl -> Bool

@@ -174,12 +174,6 @@ type Scope = [String]
 data PState = PState { startcode    :: Int
                      , input        :: AlexInput
                      , prevToken    :: Tkn
-                     , smIndex      :: !Int
-                     , scope        :: [String]
-                     , transitions  :: [(Scope,SisTransition String)]
-                     , behaviors    :: [(Scope,SisBehavior)]
-                     , warnings     :: [String]
-                     , errors       :: [String]
                      }
                      deriving (Show)
 
@@ -203,12 +197,6 @@ runP str (P p) = p initial_state
   where initial_state = PState{ startcode = 0
                               , input = (alexStartPos,'\n',[],str)
                               , prevToken = NoneT
-                              , smIndex = 0
-                              , scope = []
-                              , transitions = []
-                              , behaviors = []
-                              , warnings = []
-                              , errors = []
                               }
 
 failP :: String -> P a
@@ -234,72 +222,6 @@ getPrevToken = P $ \st -> Right (st, prevToken st)
 
 setPrevToken :: Tkn -> P ()
 setPrevToken t = P $ \st -> Right (st{ prevToken = t }, ())
-
-getSmIndex :: P Int
-getSmIndex = P $ \st -> Right (st, smIndex st)
-
-incrSmIndex :: P ()
-incrSmIndex = P $ \st -> Right (st{ smIndex = (smIndex st) + 1 }, ())
-
-newSmIndex = do
-  idx <- getSmIndex
-  incrSmIndex
-  return idx
-
-getScope :: P [String]
-getScope = P $ \st -> Right (st, scope st)
-
-setScope :: [String] -> P ()
-setScope sc = P $ \st -> Right (st{ scope = sc }, ())
-
-pushScope :: String -> P ()
-pushScope s = P $ \st -> Right (st{ scope = s:(scope st) }, ())
-
-popScope :: P String
-popScope = do
-  sc <- getScope
-  case sc of
-    [] -> failP "Popping from empty scope stack!"
-    s:sc' -> do
-      setScope sc'
-      return s
-
-getTransitions :: P [(Scope,SisTransition String)]
-getTransitions = P $ \st -> Right (st, transitions st)
-
-setTransitions :: [(Scope,SisTransition String)] -> P ()
-setTransitions ts = P $ \st -> Right (st{ transitions = ts }, ())
-
-addTransition :: Scope -> (SisTransition String) -> P ()
-addTransition s t = P $ \st -> Right (st{ transitions = (s,t):(transitions st) }, ())
-
-getBehaviors :: P [(Scope,SisBehavior)]
-getBehaviors = P $ \st -> Right (st, behaviors st)
-
-setBehaviors :: [(Scope,SisBehavior)] -> P ()
-setBehaviors ts = P $ \st -> Right (st{ behaviors = ts }, ())
-
-addBehavior :: Scope -> SisBehavior -> P ()
-addBehavior s b = P $ \st -> Right (st{ behaviors = (s,b):(behaviors st) }, ())
-
-getWarnings :: P [String]
-getWarnings = P $ \st -> Right (st, warnings st)
-
-setWarnings :: [String] -> P ()
-setWarnings ws = P $ \st -> Right (st{ warnings = ws }, ())
-
-addWarning :: String -> P ()
-addWarning w = P $ \st -> Right (st{ warnings = w:(warnings st) }, ())
-
-getErrors :: P [String]
-getErrors = P $ \st -> Right (st, errors st)
-
-setErrors :: [String] -> P ()
-setErrors es = P $ \st -> Right (st{ errors = es }, ())
-
-addError :: String -> P ()
-addError e = P $ \st -> Right (st{ errors = e:(errors st) }, ())
-
 
 lexError :: String -> P a
 lexError s = do
