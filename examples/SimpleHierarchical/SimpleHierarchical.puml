@@ -1,30 +1,34 @@
 @startuml
 state SM {
     state Action {
-        [*] --> Idle
-        Idle : entry: ^event1
-        Idle : exit: @action1
+        Idle : <entry> ^event1
+        Idle : <exit> @action1
+        [*] -> Idle
         
-        Idle --> Configuring : evConfig
-        Configuring --> Idle : evReady
+        Idle -> Configuring : evConfig
+        Configuring -> Idle : evReady
         
         state Configuring {
-          [*] --> NewValueSelection
-          NewValueSelection --> NewValuePreview : evNewValue
-          NewValuePreview --> NewValueSelection : evNewValueRejected
-          NewValuePreview --> NewValueSelection : evNewValueOk / @saveValue
+          [*] -> NewValueSelection
+          NewValueSelection -> NewValuePreview : evNewValue
+          NewValuePreview -> NewValueSelection : evNewValueRejected
+          NewValuePreview -> NewValueSelection : evNewValueOk / @saveValue
           
           state NewValuePreview {
         	 State1 -> State2
           }
         }
-        Configuring : internal: evReconfigure [ReconfigureAllowed] / @reconfigure
+        Configuring : <internal> evReconfigure / @reconfigure
     }
     --
     state Settings {
         [*] -> ReconfigureNotAllowed
-        ReconfigureNotAllowed --> ReconfigureAllowed : evAllowReconfigure
-        ReconfigureAllowed --> ReconfigureNotAllowed : evDisallowReconfigure
+        ReconfigureNotAllowed -> ReconfigureAllowed : evAllowReconfigure
+        ReconfigureAllowed -> ReconfigureNotAllowed : evDisallowReconfigure
+        --
+        [*] -> LightsOff
+        LightsOff -> LightsOn : evLightsOn
+        LightsOn -> LightsOff : evLightsOff
     }
 }
 

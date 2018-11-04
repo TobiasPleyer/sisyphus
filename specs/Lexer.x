@@ -30,9 +30,6 @@ $special  = [\^\.\:\;\,\$\@\|\*\+\?\~\-\{\}\(\)\[\]\/\<\>\=\!]
 @comment    = "#".*
 @arrow      = "-"+">"
 @regionSep  = "-"+"-" | "|"+"|"
-@entry      = "<" "e" "ntry"? ">"
-@exit       = "<" "e"? "x" "it"? ">"
-@internal   = "<" "i" "nternal"? ">"
 
 tokens :-
 
@@ -46,9 +43,10 @@ $nl                        { vSemi     }
 "@enduml"                  { endUml    }
 $special                   { special   }
 "state"                    { state     }
-@entry                     { entry     }
-@exit                      { exit      }
-@internal                  { internal  }
+"<entry>"                  { entry     }
+"<exit>"                   { exit      }
+"<internal>"               { internal  }
+"<do>"                     { doaction  }
 @id                        { ident     }
 @num                       { number    }
 
@@ -73,10 +71,13 @@ data Tkn
   | StateT
   | EntryT
   | ExitT
+  | DoActivityT
   | InternalT
   | IdT String
   | NumT String
   | VirtualSemiColonT
+  | NoteStartT
+  | NoteEndT
   | EOFT
   deriving Show
 
@@ -97,6 +98,7 @@ region    (p,_,_)   _  = return $ T p RegionSepT
 state     (p,_,_)   _  = return $ T p StateT
 entry     (p,_,_)   _  = return $ T p EntryT
 exit      (p,_,_)   _  = return $ T p ExitT
+doaction  (p,_,_)   _  = return $ T p DoActivityT
 internal  (p,_,_)   _  = return $ T p InternalT
 ident     (p,_,str) ln = return $ T p (IdT (take ln str))
 number    (p,_,str) ln = return $ T p (NumT (take ln str))
@@ -167,16 +169,19 @@ alexMove (AlexPn a l c) _    = AlexPn (a+1)  l    (c+1)
 
 type ParseError = (Maybe AlexPosn, String)
 type StartCode = Int
+type Scope = [String]
 
 data PState = PState { startcode    :: Int
                      , input        :: AlexInput
                      , prevToken    :: Tkn
                      , smIndex      :: !Int
                      , scope        :: [String]
-                     , transitions  :: [SisTransition String]
+                     , transitions  :: [(Scope,SisTransition String)]
+                     , behaviors    :: [(Scope,SisBehavior)]
                      , warnings     :: [String]
                      , errors       :: [String]
                      }
+                     deriving (Show)
 
 newtype P a = P { unP :: PState -> Either ParseError (PState,a) }
 
@@ -193,35 +198,36 @@ instance Monad P where
                         Right (env',ok) -> unP (k ok) env'
  return = pure
 
-runP :: String -> P a -> Either ParseError a
-runP str (P p)
-  = case p initial_state of
-        Left err -> Left err
-        Right (_,a) -> Right a
- where initial_state = PState{ startcode = 0
-                             , input = (alexStartPos,'\n',[],str)
-                             , prevToken = NoneT
-                             , smIndex = 0
-                             , scope = []
-                             , transitions = []
-                             , warnings = []
-                             , errors = []
-                             }
+runP :: String -> P a -> Either ParseError (PState,a)
+runP str (P p) = p initial_state
+  where initial_state = PState{ startcode = 0
+                              , input = (alexStartPos,'\n',[],str)
+                              , prevToken = NoneT
+                              , smIndex = 0
+                              , scope = []
+                              , transitions = []
+                              , behaviors = []
+                              , warnings = []
+                              , errors = []
+                              }
 
 failP :: String -> P a
 failP str = P $ \PState{ input = (p,_,_,_) } -> Left (Just p,str)
 
+getParserState :: P PState
+getParserState = P $ \st -> Right (st, st)
+
 setStartCode :: StartCode -> P ()
-setStartCode sc = P $ \s -> Right (s{ startcode = sc }, ())
+setStartCode sc = P $ \st -> Right (st{ startcode = sc }, ())
 
 getStartCode :: P StartCode
-getStartCode = P $ \s -> Right (s, startcode s)
+getStartCode = P $ \st -> Right (st, startcode st)
 
 getInput :: P AlexInput
-getInput = P $ \s -> Right (s, input s)
+getInput = P $ \st -> Right (st, input st)
 
 setInput :: AlexInput -> P ()
-setInput inp = P $ \s -> Right (s{ input = inp }, ())
+setInput inp = P $ \st -> Right (st{ input = inp }, ())
 
 getPrevToken :: P Tkn
 getPrevToken = P $ \st -> Right (st, prevToken st)
@@ -232,8 +238,13 @@ setPrevToken t = P $ \st -> Right (st{ prevToken = t }, ())
 getSmIndex :: P Int
 getSmIndex = P $ \st -> Right (st, smIndex st)
 
-incSmIndex :: P ()
-incSmIndex = P $ \st -> Right (st{ smIndex = (smIndex st) + 1 }, ())
+incrSmIndex :: P ()
+incrSmIndex = P $ \st -> Right (st{ smIndex = (smIndex st) + 1 }, ())
+
+newSmIndex = do
+  idx <- getSmIndex
+  incrSmIndex
+  return idx
 
 getScope :: P [String]
 getScope = P $ \st -> Right (st, scope st)
@@ -253,14 +264,23 @@ popScope = do
       setScope sc'
       return s
 
-getTransitions :: P [SisTransition String]
+getTransitions :: P [(Scope,SisTransition String)]
 getTransitions = P $ \st -> Right (st, transitions st)
 
-setTransitions :: [SisTransition String] -> P ()
+setTransitions :: [(Scope,SisTransition String)] -> P ()
 setTransitions ts = P $ \st -> Right (st{ transitions = ts }, ())
 
-addTransition :: (SisTransition String) -> P ()
-addTransition t = P $ \st -> Right (st{ transitions = t:(transitions st) }, ())
+addTransition :: Scope -> (SisTransition String) -> P ()
+addTransition s t = P $ \st -> Right (st{ transitions = (s,t):(transitions st) }, ())
+
+getBehaviors :: P [(Scope,SisBehavior)]
+getBehaviors = P $ \st -> Right (st, behaviors st)
+
+setBehaviors :: [(Scope,SisBehavior)] -> P ()
+setBehaviors ts = P $ \st -> Right (st{ behaviors = ts }, ())
+
+addBehavior :: Scope -> SisBehavior -> P ()
+addBehavior s b = P $ \st -> Right (st{ behaviors = (s,b):(behaviors st) }, ())
 
 getWarnings :: P [String]
 getWarnings = P $ \st -> Right (st, warnings st)
