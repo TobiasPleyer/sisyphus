@@ -19,6 +19,7 @@ import Sisyphus.Lexer
 %token
     STARTUML     { T _ StartUmlT         }
     ENDUML       { T _ EndUmlT           }
+    '.'          { T _ (SpecialT '.' )   }
     ':'          { T _ (SpecialT ':' )   }
     ';'          { T _ (SpecialT ';' )   }
     ','          { T _ (SpecialT ',' )   }
@@ -85,15 +86,23 @@ region1 :: { [RdrDecl] }
     : REGION decls  { $2 }
 
 transition :: { RdrDecl }
-    : ID ARROW ID tbody        semi { mkTransDecl STKExternal $1 $3 $4    }
-    | STARSTATE ARROW ID tbody semi { mkTransDecl STKExternal "[*]" $3 $4 }
-    | ID ARROW STARSTATE tbody semi { mkTransDecl STKExternal $1 "[*]" $4 }
-    | ID ':' INTERNAL tbody2   semi { mkTransDecl STKInternal $1 $1 $4    }
+    : rid ARROW rid tbody       semi { mkTransDecl STKExternal $1 $3 $4    }
+    | STARSTATE ARROW rid tbody semi { mkTransDecl STKExternal (UnqualId "[*]") $3 $4 }
+    | rid ARROW STARSTATE tbody semi { mkTransDecl STKExternal $1 (UnqualId "[*]") $4 }
+    | rid ':' INTERNAL tbody2   semi { mkTransDecl STKInternal $1 $1 $4    }
 
 behavior :: { RdrDecl }
-    : ID ':' ENTRY actions semi { BehaviorDecl $1 (SBEntry $4) }
-    | ID ':' EXIT actions  semi { BehaviorDecl $1 (SBExit $4) }
-    | ID ':' DOACTIVITY ID semi { BehaviorDecl $1 (SBDoActivity [SE SEKDoCall $4]) }
+    : rid ':' ENTRY actions semi { BehaviorDecl $1 (SBEntry $4) }
+    | rid ':' EXIT actions  semi { BehaviorDecl $1 (SBExit $4) }
+    | rid ':' DOACTIVITY ID semi { BehaviorDecl $1 (SBDoActivity [SE SEKDoCall $4]) }
+
+rid :: { RdrId }
+    : rid1 ID    { QualId (reverse ($2 : $1)) }
+    | ID         { UnqualId $1 }
+
+rid1 :: { [String] }
+    : rid1 ID '.'  { $2 : $1 }
+    | ID '.'       { [$1] }
 
 tbody : {- EMPTY -} { ("",Nothing,[]) }
       | ':' tbody2  { $2 }
@@ -113,9 +122,13 @@ action : '@' ID { SE SEKAction $2 }
 {
 
 data RdrDecl = StateDecl String [[RdrDecl]]
-             | BehaviorDecl String SisBehavior
-             | TransDecl (SisTransition String)
+             | BehaviorDecl RdrId SisBehavior
+             | TransDecl (SisTransition RdrId)
              deriving (Show)
+
+data RdrId = UnqualId String
+           | QualId [String]
+           deriving (Show)
 
 mkTransDecl kind src dst (trig,guard,effs) = TransDecl $ ST kind [trig] guard effs src dst
 
