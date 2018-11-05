@@ -28,7 +28,7 @@ $special  = [\^\.\:\;\,\$\@\|\*\+\?\~\-\{\}\(\)\[\]\/\<\>\=\!]
 @id         = $alpha $idchar*
 @num        = $digit+
 @comment    = "#".*
-@arrow      = "-"+">"
+@arrow      = ("-"+ ("down" | "right" | "left" | "up"))? "-"+">"
 @regionSep  = "-"+"-" | "|"+"|"
 
 tokens :-
