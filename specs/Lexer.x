@@ -7,6 +7,7 @@ import Data.Char
 
 import Control.Applicative ( Applicative(..) )
 import Control.Monad ( liftM, ap )
+import Data.List (break)
 import Data.Word (Word8)
 import qualified Sisyphus.Util as Util
 import Sisyphus.SisSyn
@@ -25,30 +26,34 @@ $white_no_nl = $white # $nl
 
 $special  = [\^\.\:\;\,\$\@\|\*\+\?\~\-\{\}\(\)\[\]\/\<\>\=\!]
 
+$all_but_nl = [$idchar $special $white_no_nl]
+
 @id         = $alpha $idchar*
 @num        = $digit+
 @comment    = "#".*
 @arrow      = ("-"+ ("down" | "right" | "left" | "up"))? "-"+">"
 @regionSep  = "-"+"-" | "|"+"|"
+@short_note = "note" ("left"|"right"|"top"|"bottom") "of" $alphanum+ ":" $all_but_nl* $nl
 
 tokens :-
 
-$white_no_nl+              { skip      }
-$nl                        { vSemi     }
-@comment                   { skip      }
-@arrow                     { arr       }
-@regionSep                 { region    }
-"[*]"                      { star      }
-"@startuml"                { startUml  }
-"@enduml"                  { endUml    }
-$special                   { special   }
-"state"                    { state     }
-"<entry>"                  { entry     }
-"<exit>"                   { exit      }
-"<internal>"               { internal  }
-"<do>"                     { doaction  }
-@id                        { ident     }
-@num                       { number    }
+        $white_no_nl+      { skip      }
+        $nl                { vsemi `andBegin` bol }
+        @comment           { skip      }
+<nobol> @arrow             { arr       }
+<bol>   @regionSep         { region    }
+        "[*]"              { star `andBegin` nobol }
+        "@startuml"        { startUml  }
+        "@enduml"          { endUml    }
+        $special           { special   }
+<bol>   "state"            { state `andBegin` nobol }
+<nobol> "<entry>"          { entry     }
+<nobol> "<exit>"           { exit      }
+<nobol> "<internal>"       { internal  }
+<nobol> "<do>"             { doaction  }
+<bol>   @id                { identNoteOrPragma }
+<nobol> @id                { ident     }
+        @num               { number    }
 
 {
 
@@ -87,7 +92,7 @@ data Tkn
 type Action = (AlexPosn,Char,String) -> Int -> P Token
 
 special, startUml, endUml, arr, star, region, state :: Action
-entry, exit, internal, ident, number, vSemi :: Action
+entry, exit, internal, ident, number, vsemi :: Action
 
 special   (p,_,str) _  = return $ T p (SpecialT  (head str))
 startUml  (p,_,_)   _  = return $ T p StartUmlT
@@ -102,7 +107,7 @@ doaction  (p,_,_)   _  = return $ T p DoActivityT
 internal  (p,_,_)   _  = return $ T p InternalT
 ident     (p,_,str) ln = return $ T p (IdT (take ln str))
 number    (p,_,str) ln = return $ T p (NumT (take ln str))
-vSemi     (p,_,_)   _  = do pTkn <- getPrevToken
+vsemi     (p,_,_)   _  = do pTkn <- getPrevToken
                             case pTkn of
                               StarStateT -> return $ T p VirtualSemiColonT
                               IdT _ -> return $ T p VirtualSemiColonT
@@ -115,6 +120,49 @@ vSemi     (p,_,_)   _  = do pTkn <- getPrevToken
 
 skip :: Action
 skip _ _ = lexToken
+
+-- These rules are pretty crude, because they allow basically
+-- everything after a note keyword as long as it is not a normal
+-- word or number
+
+isPragma :: Tkn -> Bool
+isPragma tkn =
+  case tkn of
+    IdT  _    -> True
+    NumT _    -> True
+    otherwise -> False
+
+isNote :: Tkn -> Bool
+isNote tkn =
+  case tkn of
+    IdT _        -> True
+    SpecialT '"' -> True
+    otherwise    -> False
+
+skipLine :: (AlexPosn,Char,String) -> P Token
+skipLine inp@(p@(AlexPn n l c),_,str) = do
+  let
+    (line,rest) = break (== '\n') str
+    skipped = (length line) + 1
+  setInput (AlexPn (n+skipped+1) (l+1) 0,'\n',[],tail rest)
+  setStartCode bol
+  lexToken
+
+skipPragmaOrElse :: (AlexPosn,Char,String) -> P Token -> P Token
+skipPragmaOrElse inp cont = do
+  nextTkn <- peekNextTkn
+  if isPragma nextTkn
+  then skipLine inp
+  else cont
+
+identNoteOrPragma :: Action
+identNoteOrPragma inp@(p,_,str) ln = do
+  let firstWord = take ln str
+      returnId = return $ T p (IdT firstWord)
+  case firstWord of
+    "scale" -> skipPragmaOrElse inp returnId
+    "hide"  -> skipPragmaOrElse inp returnId
+    otherwise -> returnId
 
 -- -----------------------------------------------------------------------------
 -- The input type
@@ -147,7 +195,7 @@ alexGetByte (p,_,[],(c:s))  = let p' = alexMove p c
 -- Token positions
 
 -- `Posn' records the location of a token in the input text.  It has three
--- fields: the address (number of chacaters preceding the token), line number
+-- fields: the address (number of characters preceding the token), line number
 -- and column of a token within the file. `start_pos' gives the position of the
 -- start of the file and `eof_pos' a standard encoding for the end of file.
 -- `move_pos' calculates the new position after traversing a given character,
@@ -248,6 +296,22 @@ lexToken = do
       t@(T p tkn) <- a (p,c,s) len
       setPrevToken tkn
       return t
+
+peekNextTkn :: P Tkn
+peekNextTkn = do
+  inp@(p,c,_,s) <- getInput
+  sc <- getStartCode
+  peekNextTkn' inp sc
+
+peekNextTkn' inp@(p,c,_,s) sc = do
+  case alexScan inp sc of
+    AlexEOF -> return EOFT
+    AlexError _ -> lexError "lexical error"
+    AlexSkip inp1 _ -> do
+      peekNextTkn' inp1 sc
+    AlexToken inp1 len a -> do
+      t@(T p tkn) <- a (p,c,s) len
+      return tkn
 
 tokenize :: P [Tkn]
 tokenize = go []
