@@ -299,22 +299,21 @@ lexToken = do
 
 peekNextTkn :: P Tkn
 peekNextTkn = do
-  pTkn <- getPrevToken
-  inp@(p,c,_,s) <- getInput
-  sc <- getStartCode
-  tkn <- peekNextTkn' inp sc
-  setPrevToken pTkn
-  return tkn
+  st@(PState sc inp pTkn) <- getParserState
+  let tkn = peekNextTkn' st inp sc
+  case tkn of
+    Left err -> lexError err
+    Right t -> return t
 
-peekNextTkn' inp@(p,c,_,s) sc = do
+peekNextTkn' st inp@(p,c,_,s) sc = do
   case alexScan inp sc of
-    AlexEOF -> return EOFT
-    AlexError _ -> lexError "lexical error"
-    AlexSkip inp1 _ -> do
-      peekNextTkn' inp1 sc
-    AlexToken inp1 len a -> do
-      t@(T p tkn) <- a (p,c,s) len
-      return tkn
+    AlexEOF -> Right EOFT
+    AlexError _ -> Left "lexical error"
+    AlexSkip inp1 _ -> peekNextTkn' st inp1 sc
+    AlexToken inp1 len a ->
+      case unP (a (p,c,s) len) st of
+        Left (p,s) -> Left s
+        Right (st',t@(T p tkn)) -> Right tkn
 
 tokenize :: P [Tkn]
 tokenize = go []
