@@ -158,7 +158,7 @@ skipPragmaOrElse inp cont = do
 identNoteOrPragma :: Action
 identNoteOrPragma inp@(p,_,str) ln = do
   let firstWord = take ln str
-      returnId = return $ T p (IdT firstWord)
+      returnId = do setStartCode nobol; return $ T p (IdT firstWord)
   case firstWord of
     "scale" -> skipPragmaOrElse inp returnId
     "hide"  -> skipPragmaOrElse inp returnId
@@ -299,9 +299,12 @@ lexToken = do
 
 peekNextTkn :: P Tkn
 peekNextTkn = do
+  pTkn <- getPrevToken
   inp@(p,c,_,s) <- getInput
   sc <- getStartCode
-  peekNextTkn' inp sc
+  tkn <- peekNextTkn' inp sc
+  setPrevToken pTkn
+  return tkn
 
 peekNextTkn' inp@(p,c,_,s) sc = do
   case alexScan inp sc of
