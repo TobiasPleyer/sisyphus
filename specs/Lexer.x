@@ -24,7 +24,7 @@ $idchar   = [$alphanum \_]
 $nl       = [\n\r\f]
 $white_no_nl = $white # $nl
 
-$special  = [\^\.\:\;\,\$\@\|\*\+\?\~\-\{\}\(\)\[\]\/\<\>\=\!]
+$special  = [\^\.\:\;\,\$\@\|\*\+\?\~\-\{\}\(\)\[\]\/\<\>\=\!\"]
 
 $all_but_nl = [$idchar $special $white_no_nl]
 
@@ -132,19 +132,11 @@ isPragma tkn =
     NumT _    -> True
     otherwise -> False
 
-isNote :: Tkn -> Bool
-isNote tkn =
-  case tkn of
-    IdT _        -> True
-    SpecialT '"' -> True
-    otherwise    -> False
-
 skipLine :: (AlexPosn,Char,String) -> P Token
-skipLine inp@(p@(AlexPn n l c),_,str) = do
+skipLine inp@(p,c,str) = do
   let
-    (line,rest) = break (== '\n') str
-    skipped = (length line) + 1
-  setInput (AlexPn (n+skipped+1) (l+1) 0,'\n',[],tail rest)
+    (line,inp') = takeLine (p,c,[],str)
+  setInput inp'
   setStartCode bol
   lexToken
 
@@ -155,13 +147,45 @@ skipPragmaOrElse inp cont = do
   then skipLine inp
   else cont
 
+isNote :: Tkn -> Bool
+isNote tkn =
+  case tkn of
+    IdT _        -> True
+    SpecialT '"' -> True
+    otherwise    -> False
+
+skipNote :: (AlexPosn,Char,String) -> P Token
+skipNote inp@(p,c,str) = do
+  let
+    (line,inp') = takeLine (p,c,[],str)
+  if (('"' `elem` line) || (':' `elem` line)) -- this means a one line note
+  then do
+    setInput inp'
+  else do
+    let
+      matchEndNote ("end":"note":_) = True
+      matchEndNote _ = False
+      isNoteEnd (line,inp) = (matchEndNote (words (line))) || (isInputEmpty inp)
+      (_,inp'') = until isNoteEnd (takeLine . snd) (line,inp')
+    setInput inp''
+  setStartCode bol
+  lexToken
+
+skipNoteOrElse :: (AlexPosn,Char,String) -> P Token -> P Token
+skipNoteOrElse inp cont = do
+  nextTkn <- peekNextTkn
+  if isNote nextTkn
+  then skipNote inp
+  else cont
+
 identNoteOrPragma :: Action
 identNoteOrPragma inp@(p,_,str) ln = do
   let firstWord = take ln str
       returnId = do setStartCode nobol; return $ T p (IdT firstWord)
   case firstWord of
-    "scale" -> skipPragmaOrElse inp returnId
-    "hide"  -> skipPragmaOrElse inp returnId
+    "scale" -> inp `skipPragmaOrElse` returnId
+    "hide"  -> inp `skipPragmaOrElse` returnId
+    "note"  -> inp `skipNoteOrElse` returnId
     otherwise -> returnId
 
 -- -----------------------------------------------------------------------------
@@ -174,9 +198,12 @@ type AlexInput = (AlexPosn,     -- current position,
                   [Byte],
                   String)       -- current input string
 
+isInputEmpty :: AlexInput -> Bool
+isInputEmpty (_,_,_,[]) = True
+isInputEmpty _          = False
+
 alexInputPrevChar :: AlexInput -> Char
 alexInputPrevChar (_,c,_,_) = c
-
 
 alexGetChar :: AlexInput -> Maybe (Char,AlexInput)
 alexGetChar (_,_,[],[]) = Nothing
@@ -190,6 +217,14 @@ alexGetByte (_,_,[],[]) = Nothing
 alexGetByte (p,_,[],(c:s))  = let p' = alexMove p c
                                   (b:bs) = Util.encode c
                               in p' `seq`  Just (b, (p', c, bs, s))
+
+takeLine :: AlexInput -> (String,AlexInput)
+takeLine inp = go [] inp
+  where go cs inp =
+          let line = reverse cs in
+          case alexGetChar inp of
+            Nothing -> (line,inp)
+            Just (c,inp') -> if c == '\n' then (line,inp') else go (c:cs) inp'
 
 -- -----------------------------------------------------------------------------
 -- Token positions
