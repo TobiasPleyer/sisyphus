@@ -23,15 +23,15 @@ data SisStateMachine a = SSM {
     ssmName :: String
   , ssmEvents :: [String]
   , ssmActions :: [String]
-  , ssmRegions :: [SisRegion a]
+  , ssmRegions :: [a]
   , ssmTransitions :: [SisTransition a]
   }
   deriving (Show)
 
 data SisRegion a = SR {
-    srName :: Maybe a
+    srName :: String
   , srIndex :: !Int
-  , srVertices :: [SisState a]
+  , srVertices :: [a]
   , srInitial :: Maybe a
   , srFinals :: [a]
   }
@@ -39,10 +39,10 @@ data SisRegion a = SR {
 
 data SisState a =
   STNormal {
-    stnName :: a
+    stnName :: String
   , stnIndex :: !Int
   , stnBehaviours :: [SisBehavior]
-  , stnRegions :: [SisRegion a]
+  , stnRegions :: [a]
   }
   |
   STSubmachine

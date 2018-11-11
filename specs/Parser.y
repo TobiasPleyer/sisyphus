@@ -1,6 +1,8 @@
 {
 {-# OPTIONS_GHC -w #-}
-module Sisyphus.Parser (parse, P) where
+module Sisyphus.Parser
+
+where
 
 import Control.Monad (forM_, when)
 import Data.Char

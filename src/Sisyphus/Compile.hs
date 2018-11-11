@@ -8,6 +8,7 @@ import Data.Foldable (traverse_)
 import qualified Control.Monad.Trans.State.Lazy as TSL
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
+
 import Sisyphus.Types
 import Sisyphus.Util (dedupeList, addIngoingTransition, addOutgoingTransition)
 
