@@ -49,7 +49,7 @@ import Sisyphus.Lexer
 
 %%
 
-sisyphus : startuml decls enduml { $2 }
+sisyphus : startuml decls enduml { reverse $2 }
 
 startuml : STARTUML    {()}
          | {- empty -} {()}
@@ -75,7 +75,7 @@ state :: { RdrDecl }
     | STATE ID '{' regions '}'  { StateDecl $2 $4 }
 
 regions :: { [[RdrDecl]] }
-    : decls regions1  { $1 : $2 }
+    : decls regions1  { (reverse $1) : (reverse $2) }
 
 regions1 :: { [[RdrDecl]] }
     : regions1 region1  { $2 : $1 }
@@ -83,7 +83,7 @@ regions1 :: { [[RdrDecl]] }
     | {- empty -}       { [] }
 
 region1 :: { [RdrDecl] }
-    : REGION decls  { $2 }
+    : REGION decls  { reverse $2 }
 
 transition :: { RdrDecl }
     : rid ARROW rid tbody       semi { mkTransDecl STKExternal $1 $3 $4    }
