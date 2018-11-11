@@ -40,7 +40,8 @@ data SisRegion a = SR {
 data SisState a =
   STNormal {
     stnName :: String
-  , stnIndex :: !Int
+  , stnId :: a
+  , stnIndex :: a
   , stnBehaviours :: [SisBehavior]
   , stnRegions :: [a]
   }
