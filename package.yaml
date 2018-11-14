@@ -27,6 +27,7 @@ dependencies:
 - data-default
 - filepath
 - ginger
+- pretty-show
 - text
 - transformers
 

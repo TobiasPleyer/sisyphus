@@ -7,11 +7,13 @@ import System.Console.CmdArgs
 import System.FilePath
 import System.Exit (exitFailure, exitSuccess, exitWith, ExitCode(..))
 import System.IO (stderr, hPutStr)
+import Text.Show.Pretty (pPrint)
 
 import Sisyphus.Types
 import Sisyphus.Lexer
 import Sisyphus.Parser
 import Sisyphus.Targets (supportedTargets, renderTarget)
+import Sisyphus.Compile2
 
 
 bye :: String -> IO a
@@ -58,21 +60,22 @@ main = do
 
     Right ts -> return ts
   putStrLn "Tokens"
-  print tkns
+  pPrint tkns
   putStrLn "------"
-  (pState,sm) <- case runP str parse of
+  (pState,decls) <- case runP str parse of
     Left (Just (AlexPn _ line col),err) ->
             die (file ++ ":" ++ show line ++ ":" ++ show col
                              ++ ": " ++ err ++ "\n")
     Left (Nothing, err) ->
             die (file ++ ": " ++ err ++ "\n")
 
-    Right (pState,sm) -> return (pState,sm)
-  putStrLn "Parser State"
-  print pState
+    Right (pState,decls) -> return (pState,decls)
+  putStrLn "Declarations"
+  pPrint decls
   putStrLn "------"
+  let stage1 = runDecls decls
   putStrLn "State Machine"
-  print sm
+  pPrint stage1
   putStrLn "------"
 --when (and [ not $ null $ warnings smry
 --          , not $ no_warnings opts
