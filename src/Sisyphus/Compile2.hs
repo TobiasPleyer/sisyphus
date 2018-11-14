@@ -35,35 +35,38 @@ data GrammarSummary = GS
 type SummaryM = TSL.State GrammarSummary
 
 initialSummary :: GrammarSummary
-initialSummary = GS 0 0 [] S.empty S.empty [] [] M.empty IM.empty IM.empty [] []
+initialSummary = GS (-1) (-1) [] S.empty S.empty [] [] M.empty IM.empty IM.empty [] []
 
 runDecls :: [RdrDecl] -> GrammarSummary
-runDecls decls = TSL.execState (runDeclsM decls) initialSummary
+runDecls decls = TSL.execState (runRegionDeclsM [decls]) initialSummary
 
 runDeclsM :: [RdrDecl] -> SummaryM [SisState Id]
 runDeclsM decls = do
-    states <- runStateDeclsM decls
+    rIndex <- currentRegionIndex
+    states <- runStateDeclsM rIndex decls
     runBehaviorDeclsM decls
     runTransitionDeclsM decls
     return states
 
-runStateDeclsM :: [RdrDecl] -> SummaryM [SisState Id]
-runStateDeclsM decls = do
+runStateDeclsM :: Id -> [RdrDecl] -> SummaryM [SisState Id]
+runStateDeclsM rIndex decls = do
     let stateDecls = filter isStateDecl decls
     forM stateDecls $ \(StateDecl name declss) -> do
+        id <- newStateId
         pushScope name
         regionIds <- runRegionDeclsM declss
         popScope
-        addNormalState name [] (map srIndex regionIds)
+        addNormalState name id rIndex [] (map srIndex regionIds)
 
-runBehaviorDeclsM = undefined
-runTransitionDeclsM = undefined
+runBehaviorDeclsM _ = return ()
+runTransitionDeclsM _ = return ()
 
 runRegionDeclsM :: [[RdrDecl]] -> SummaryM [SisRegion Id]
 runRegionDeclsM declss = do
     forM declss $ \decls -> do
+        id <- newRegionId
         vertices <- runDeclsM decls
-        addRegion "" (map stnIndex vertices) Nothing []
+        addRegion "" id (map stnId vertices) Nothing []
 
 getScope :: SummaryM [String]
 getScope = TSL.gets gsScope
@@ -83,28 +86,28 @@ popScope = do
 
 newStateId :: SummaryM Id
 newStateId = do
-    id <- TSL.gets gsStateIndex
-    TSL.modify (\st -> st{gsStateIndex=id+1})
-    return id
+    new_id <- (+1) <$> TSL.gets gsStateIndex
+    TSL.modify (\st -> st{gsStateIndex=new_id})
+    return new_id
 
 newRegionId :: SummaryM Id
 newRegionId = do
-    id <- TSL.gets gsRegionIndex
-    TSL.modify (\st -> st{gsRegionIndex=id+1})
-    return id
+    new_id <- (+1) <$> TSL.gets gsRegionIndex
+    TSL.modify (\st -> st{gsRegionIndex=new_id})
+    return new_id
+
+currentRegionIndex = TSL.gets gsRegionIndex
 
 lookupState :: String -> SummaryM ([(Scope,Id)])
 lookupState s = (M.findWithDefault [] s) <$> (TSL.gets gsStateLookup)
 
-addNormalState :: String -> [SisBehavior] -> [Id] -> SummaryM (SisState Id)
-addNormalState name behaviors regions = do
-    id <- newStateId
-    index <- TSL.gets gsRegionIndex
-    let state = STNormal name id index behaviors regions
+addNormalState :: String -> Id -> Id -> [SisBehavior] -> [Id] -> SummaryM (SisState Id)
+addNormalState name id index behaviors regions = do
     scope <- getScope
     stateLookup <- TSL.gets gsStateLookup
     stateMap <- TSL.gets gsStateMap
     let
+        state = STNormal name id index behaviors regions
         stateMap' = IM.insert id state stateMap
         stateLookup' = M.alter (\ms -> case ms of
                                   Nothing -> Just [(scope,id)]
@@ -113,11 +116,10 @@ addNormalState name behaviors regions = do
                          , gsStateLookup=stateLookup' })
     return state
 
-addRegion :: String -> [Id] -> (Maybe Id) -> [Id] -> SummaryM (SisRegion Id)
-addRegion name vertices initial finals = do
-    id <- newRegionId
-    let region = SR name id vertices initial finals
+addRegion :: String -> Id -> [Id] -> (Maybe Id) -> [Id] -> SummaryM (SisRegion Id)
+addRegion name id vertices initial finals = do
     regionMap <- TSL.gets gsRegionMap
-    let regionMap' = IM.insert id region regionMap
+    let region = SR name id vertices initial finals
+        regionMap' = IM.insert id region regionMap
     TSL.modify (\st -> st{ gsRegionMap=regionMap'})
     return region
