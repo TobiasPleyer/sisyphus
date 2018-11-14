@@ -123,15 +123,6 @@ action : '@' ID { SE SEKAction $2 }
 
 {
 
-data RdrDecl = StateDecl String [[RdrDecl]]
-             | BehaviorDecl RdrId SisBehavior
-             | TransDecl (SisTransition RdrId)
-             deriving (Show)
-
-data RdrId = UnqualId String
-           | QualId [String]
-           deriving (Show)
-
 mkTransDecl kind src dst (trig,guard,effs) = TransDecl $ ST kind [trig] guard effs src dst
 
 isStateDecl :: RdrDecl -> Bool

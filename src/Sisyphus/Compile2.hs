@@ -3,7 +3,7 @@
 module Sisyphus.Compile2 where
 
 
-import Control.Monad (forM, forM_, mapM_)
+import Control.Monad (forM, forM_, mapM_, when)
 import Data.Foldable (traverse_)
 import qualified Control.Monad.Trans.State.Lazy as TSL
 import qualified Data.Map.Strict as M
@@ -13,6 +13,7 @@ import qualified Data.Set as S
 import Sisyphus.SisSyn
 import Sisyphus.Lexer
 import Sisyphus.Parser
+import Sisyphus.Util
 
 
 type Id = Int
@@ -56,9 +57,20 @@ runStateDeclsM rIndex decls = do
         pushScope name
         regionIds <- runRegionDeclsM declss
         popScope
-        addNormalState name id rIndex [] (map srIndex regionIds)
+        addNormalStateM name id rIndex [] (map srIndex regionIds)
 
-runBehaviorDeclsM _ = return ()
+runBehaviorDeclsM decls = do
+    let behaviorDecls = filter isBehaviorDecl decls
+    stateLookup <- TSL.gets gsStateLookup
+    stateMap <- TSL.gets gsStateMap
+    forM_ behaviorDecls $ \(BehaviorDecl rdrId behavior) -> do
+        let stateIds = lookupStateFromRdrId stateLookup rdrId
+        if (null stateIds)
+        then addError $ "Unknown state id: " ++ (show rdrId)
+        else if (length stateIds > 1)
+             then addError $ "State id '" ++ (show rdrId) ++ "' is ambiguous"
+             else addBehaviorToStateM (head stateIds) behavior
+
 runTransitionDeclsM _ = return ()
 
 runRegionDeclsM :: [[RdrDecl]] -> SummaryM [SisRegion Id]
@@ -66,7 +78,7 @@ runRegionDeclsM declss = do
     forM declss $ \decls -> do
         id <- newRegionId
         vertices <- runDeclsM decls
-        addRegion "" id (map stnId vertices) Nothing []
+        addRegionM "" id (map stnId vertices) Nothing []
 
 getScope :: SummaryM [String]
 getScope = TSL.gets gsScope
@@ -101,8 +113,26 @@ currentRegionIndex = TSL.gets gsRegionIndex
 lookupState :: String -> SummaryM ([(Scope,Id)])
 lookupState s = (M.findWithDefault [] s) <$> (TSL.gets gsStateLookup)
 
-addNormalState :: String -> Id -> Id -> [SisBehavior] -> [Id] -> SummaryM (SisState Id)
-addNormalState name id index behaviors regions = do
+getWarnings :: SummaryM [String]
+getWarnings = TSL.gets gsWarnings
+
+setWarnings :: [String] -> SummaryM ()
+setWarnings ws = TSL.state (\gs -> ((), gs{gsWarnings=ws}))
+
+addWarning :: String -> SummaryM ()
+addWarning w = TSL.state (\gs -> ((), gs{gsWarnings=w:(gsWarnings gs)}))
+
+getErrors :: SummaryM [String]
+getErrors = TSL.gets gsErrors
+
+setErrors :: [String] -> SummaryM ()
+setErrors es = TSL.state (\gs -> ((), gs{gsErrors=es}))
+
+addError :: String -> SummaryM ()
+addError e = TSL.state (\gs -> ((), gs{gsErrors=e:(gsErrors gs)}))
+
+addNormalStateM :: String -> Id -> Id -> [SisBehavior] -> [Id] -> SummaryM (SisState Id)
+addNormalStateM name id index behaviors regions = do
     scope <- getScope
     stateLookup <- TSL.gets gsStateLookup
     stateMap <- TSL.gets gsStateMap
@@ -116,10 +146,18 @@ addNormalState name id index behaviors regions = do
                          , gsStateLookup=stateLookup' })
     return state
 
-addRegion :: String -> Id -> [Id] -> (Maybe Id) -> [Id] -> SummaryM (SisRegion Id)
-addRegion name id vertices initial finals = do
+addRegionM :: String -> Id -> [Id] -> (Maybe Id) -> [Id] -> SummaryM (SisRegion Id)
+addRegionM name id vertices initial finals = do
     regionMap <- TSL.gets gsRegionMap
     let region = SR name id vertices initial finals
         regionMap' = IM.insert id region regionMap
     TSL.modify (\st -> st{ gsRegionMap=regionMap'})
     return region
+
+addBehaviorToStateM :: Id -> SisBehavior -> SummaryM ()
+addBehaviorToStateM stateId behavior = do
+    stateMap <- TSL.gets gsStateMap
+    let state = (IM.!) stateMap stateId
+        state' = state{stnBehaviors=(behavior:stnBehaviors state)} 
+        stateMap' = IM.insert stateId state' stateMap
+    TSL.modify (\st -> st{ gsStateMap=stateMap' })

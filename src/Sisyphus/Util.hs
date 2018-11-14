@@ -5,10 +5,13 @@ import Data.Word
 import Data.Bits
 import Data.Char
 import Data.Maybe
-import Data.List ((\\))
+import Data.List ((\\), isPrefixOf)
+import qualified Data.Map.Strict as M
+import qualified Data.IntMap.Strict as IM
 import qualified Data.Set as S
 
 import Sisyphus.Types
+import Sisyphus.SisSyn (RdrId(..))
 
 
 -- | Encode a Haskell String to a list of Word8 values, in UTF8 format.
@@ -67,3 +70,13 @@ isTriggeredBy state event = not
                             , map rspecTrigger (stInternalReactions state)
                             ]
 
+
+lookupStateFromRdrId :: M.Map String [([String],Int)] -> RdrId -> [Int]
+lookupStateFromRdrId stateLookup rdrId =
+  let (name,prefix) = case rdrId of
+                        UnqualId id -> (id,[])
+                        QualId ids -> (last ids, reverse (init ids))
+      candidates = M.lookup name stateLookup
+  in case candidates of
+    Nothing -> []
+    Just cs -> map snd (filter ((prefix `isPrefixOf`) . fst) cs)

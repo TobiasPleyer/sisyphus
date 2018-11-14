@@ -1,6 +1,21 @@
 
 module Sisyphus.SisSyn where
 
+import Data.List (intersperse)
+
+
+data RdrDecl = StateDecl String [[RdrDecl]]
+             | BehaviorDecl RdrId SisBehavior
+             | TransDecl (SisTransition RdrId)
+             deriving (Show)
+
+data RdrId = UnqualId String
+           | QualId [String]
+
+instance Show RdrId where
+  show (UnqualId id) = id
+  show (QualId ids) = concat $ intersperse "." ids
+  showsPrec _ r s = (show r) ++ s
 
 data Guard = G String
            | NotG String
@@ -42,7 +57,7 @@ data SisState a =
     stnName :: String
   , stnId :: a
   , stnIndex :: a
-  , stnBehaviours :: [SisBehavior]
+  , stnBehaviors :: [SisBehavior]
   , stnRegions :: [a]
   }
   |
