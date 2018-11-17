@@ -48,6 +48,7 @@ options = cmdArgsMode $ Options
 
 main :: IO ()
 main = do
+  let debug = False
   opts <- cmdArgsRun options
   let file = head $ files opts
   str <- readFile file
@@ -59,9 +60,10 @@ main = do
             die (file ++ ": " ++ err ++ "\n")
 
     Right ts -> return ts
-  putStrLn "Tokens"
-  pPrint tkns
-  putStrLn "------"
+  when debug $ do
+    putStrLn "Tokens"
+    pPrint tkns
+    putStrLn "------"
   (pState,decls) <- case runP str parse of
     Left (Just (AlexPn _ line col),err) ->
             die (file ++ ":" ++ show line ++ ":" ++ show col
@@ -70,33 +72,30 @@ main = do
             die (file ++ ": " ++ err ++ "\n")
 
     Right (pState,decls) -> return (pState,decls)
-  putStrLn "Declarations"
-  pPrint decls
-  putStrLn "------"
+  when debug $ do
+    putStrLn "Declarations"
+    pPrint decls
+    putStrLn "------"
   let stage1 = runDecls decls
-  putStrLn "State Machine"
-  pPrint stage1
-  putStrLn "------"
---when (and [ not $ null $ warnings smry
---          , not $ no_warnings opts
---          , not $ warn_is_error opts]) $ do
---  putStrLn "== Warnings =="
---  forM_ (warnings smry) putStrLn
----- This is the final summary after the command line flags have been evaluated
---let summary = if (warn_is_error opts)
---               then
---                 let errors' = (warnings smry) ++ (errors smry)
---                 in smry{errors=errors'}
---               else smry
---when (not $ null $ errors summary) $ do
---  putStrLn "The following errors prevent further processing:"
---  putStrLn "== Errors =="
---  forM_ (errors summary) putStrLn
---  exitFailure
----- This is the state machine after the checks have been run
---let statemachine = stateMachine summary
---forM_ (targets opts) $ renderTarget statemachine (outputdir opts)
---when (print_statemachine opts) $
---  print statemachine
---print "Done"
---exitSuccess
+  when debug $ do
+    putStrLn "State Machine"
+    pPrint stage1
+    putStrLn "------"
+  when (and [ not $ null $ gsWarnings stage1
+            , not $ no_warnings opts
+            , not $ warn_is_error opts]) $ do
+    putStrLn "== Warnings =="
+    forM_ (gsWarnings stage1) putStrLn
+  -- This is the final summary after the command line flags have been evaluated
+  let summary = if (warn_is_error opts)
+                 then
+                   let errors' = (gsWarnings stage1) ++ (gsErrors stage1)
+                   in stage1{gsErrors=errors'}
+                 else stage1
+  when (not $ null $ gsErrors summary) $ do
+    putStrLn "The following errors prevent further processing:"
+    putStrLn "== Errors =="
+    forM_ (gsErrors summary) putStrLn
+    exitFailure
+  print "Done"
+  exitSuccess
