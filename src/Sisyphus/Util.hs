@@ -83,7 +83,15 @@ lookupStateFromRdrId stateLookup rdrId =
 
 
 hasPseudoStates :: SisTransition RdrId -> Bool
-hasPseudoStates trans = ((stSrc trans) == (UnqualId "[*]")) || ((stDst trans) == (UnqualId "[*]"))
+hasPseudoStates trans = any ($ trans) [isInitialTrans, isFinalTrans]
+
+
+isInitialTrans :: SisTransition RdrId -> Bool
+isInitialTrans trans = ((stSrc trans) == (UnqualId "[*]"))
+
+
+isFinalTrans :: SisTransition RdrId -> Bool
+isFinalTrans trans = ((stDst trans) == (UnqualId "[*]"))
 
 
 getAllBehaviorEvents :: SisBehavior -> [String]

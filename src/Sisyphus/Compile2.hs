@@ -9,6 +9,7 @@ import qualified Control.Monad.Trans.State.Lazy as TSL
 import qualified Data.Map.Strict as M
 import qualified Data.IntMap.Strict as IM
 import qualified Data.Set as S
+import Data.Maybe (isJust)
 
 import Sisyphus.SisSyn
 import Sisyphus.Lexer
@@ -102,14 +103,25 @@ runNormalTransitionM trans = do
                 }
 
 runPseudoTransitionM :: (SisTransition RdrId) -> SummaryM ()
-runPseudoTransitionM trans = return ()
+runPseudoTransitionM trans = do
+    if (isInitialTrans trans)
+    then ifUniqueStateId (stDst trans) markStateInitialM
+    else if (isFinalTrans trans)
+         then ifUniqueStateId (stSrc trans) markStateFinalM
+         else addError $ "Unknown pseudo state in transition " ++ (show trans)
 
 runRegionDeclsM :: [[RdrDecl]] -> SummaryM [SisRegion Id]
 runRegionDeclsM declss = do
     forM declss $ \decls -> do
         id <- newRegionId
+        addEmptyRegion "" id
         vertices <- runDeclsM decls
-        addRegionM "" id (map stnId vertices) Nothing []
+        regionMap <- getRegionMap
+        let region = (IM.!) regionMap id
+            region' = region{ srVertices=(map stnId vertices) }
+            regionMap' = IM.insert id region' regionMap
+        TSL.modify (\st -> st{ gsRegionMap=regionMap' })
+        return region'
 
 ifUniqueStateId :: RdrId -> (Id -> SummaryM ()) -> SummaryM ()
 ifUniqueStateId rdrId action = do
@@ -172,6 +184,12 @@ setErrors es = TSL.state (\gs -> ((), gs{gsErrors=es}))
 addError :: String -> SummaryM ()
 addError e = TSL.state (\gs -> ((), gs{gsErrors=e:(gsErrors gs)}))
 
+getStateMap :: SummaryM (IM.IntMap (SisState Id))
+getStateMap = TSL.gets gsStateMap
+
+getRegionMap :: SummaryM (IM.IntMap (SisRegion Id))
+getRegionMap = TSL.gets gsRegionMap
+
 addNormalStateM :: String -> Id -> Id -> [SisBehavior] -> [Id] -> SummaryM (SisState Id)
 addNormalStateM name id index behaviors regions = do
     scope <- getScope
@@ -189,11 +207,14 @@ addNormalStateM name id index behaviors regions = do
 
 addRegionM :: String -> Id -> [Id] -> (Maybe Id) -> [Id] -> SummaryM (SisRegion Id)
 addRegionM name id vertices initial finals = do
-    regionMap <- TSL.gets gsRegionMap
+    regionMap <- getRegionMap
     let region = SR name id vertices initial finals
         regionMap' = IM.insert id region regionMap
-    TSL.modify (\st -> st{ gsRegionMap=regionMap'})
+    TSL.modify (\st -> st{ gsRegionMap=regionMap' })
     return region
+
+addEmptyRegion :: String -> Id -> SummaryM (SisRegion Id)
+addEmptyRegion name id = addRegionM name id [] Nothing []
 
 addBehaviorToStateM :: SisBehavior -> Id -> SummaryM ()
 addBehaviorToStateM behavior stateId = do
@@ -205,3 +226,31 @@ addBehaviorToStateM behavior stateId = do
 
 addTransition :: SisTransition Id -> SummaryM ()
 addTransition t = TSL.state (\gs -> ((), gs{gsTransitions=t:(gsTransitions gs)}))
+
+markStateInitialM :: Id -> SummaryM ()
+markStateInitialM stateId = do
+    stateMap <- getStateMap
+    regionMap <- getRegionMap
+    let state = (IM.!) stateMap stateId
+        regionIndex = stnIndex state
+        region = (IM.!) regionMap regionIndex
+    if (isJust (srInitial region))
+    then addError $ "Region of state " ++ (stnName state) ++ " already has an intial state"
+    else do
+         let region' = region{ srInitial = (Just stateId) }
+             regionMap' = IM.insert regionIndex region' regionMap
+         TSL.modify (\st -> st{ gsRegionMap=regionMap' })
+
+markStateFinalM :: Id -> SummaryM ()
+markStateFinalM stateId = do
+    stateMap <- getStateMap
+    regionMap <- getRegionMap
+    let state = (IM.!) stateMap stateId
+        regionIndex = stnIndex state
+        region = (IM.!) regionMap regionIndex
+    if (stateId `elem` (srFinals region))
+    then addError $ "State " ++ (stnName state) ++ " has been marked final more than once"
+    else do
+         let region' = region{ srFinals = stateId:(srFinals region) }
+             regionMap' = IM.insert regionIndex region' regionMap
+         TSL.modify (\st -> st{ gsRegionMap=regionMap' })
