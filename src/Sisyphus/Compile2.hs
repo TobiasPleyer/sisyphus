@@ -39,7 +39,11 @@ initialSummary :: GrammarSummary
 initialSummary = GS (-1) (-1) [] S.empty S.empty [] [] M.empty IM.empty IM.empty [] []
 
 runDecls :: [RdrDecl] -> GrammarSummary
-runDecls decls = TSL.execState (runRegionDeclsM [decls]) initialSummary
+runDecls decls = TSL.execState (
+    do
+        toplevelRegions <- runRegionDeclsM [decls]
+        TSL.modify (\st -> st{gsRegions=(map srIndex toplevelRegions)})
+    ) initialSummary
 
 runDeclsM :: [RdrDecl] -> SummaryM [SisState Id]
 runDeclsM decls = do
@@ -59,19 +63,46 @@ runStateDeclsM rIndex decls = do
         popScope
         addNormalStateM name id rIndex [] (map srIndex regionIds)
 
+runBehaviorDeclsM :: [RdrDecl] -> SummaryM ()
 runBehaviorDeclsM decls = do
     let behaviorDecls = filter isBehaviorDecl decls
     stateLookup <- TSL.gets gsStateLookup
     stateMap <- TSL.gets gsStateMap
     forM_ behaviorDecls $ \(BehaviorDecl rdrId behavior) -> do
-        let stateIds = lookupStateFromRdrId stateLookup rdrId
-        if (null stateIds)
-        then addError $ "Unknown state id: " ++ (show rdrId)
-        else if (length stateIds > 1)
-             then addError $ "State id '" ++ (show rdrId) ++ "' is ambiguous"
-             else addBehaviorToStateM (head stateIds) behavior
+        ifUniqueStateId rdrId $ \id -> do
+            addBehaviorToStateM behavior id
+            let events = getAllBehaviorEvents behavior
+                actions = getAllBehaviorActions behavior
+            TSL.modify $ \st -> st{
+                gsEvents = S.union (gsEvents st) (S.fromList events),
+                gsActions = S.union (gsActions st) (S.fromList actions)
+                }
 
-runTransitionDeclsM _ = return ()
+runTransitionDeclsM :: [RdrDecl] -> SummaryM ()
+runTransitionDeclsM decls = do
+    let transitionDecls = filter isTransDecl decls
+    forM_ transitionDecls $ \(TransDecl trans) -> do
+        if (hasPseudoStates trans)
+        then runPseudoTransitionM trans
+        else runNormalTransitionM trans
+
+runNormalTransitionM :: (SisTransition RdrId) -> SummaryM ()
+runNormalTransitionM trans = do
+    let srcRdrId = stSrc trans
+        dstRdrId = stDst trans
+    ifUniqueStateId srcRdrId $ \srcId ->
+        ifUniqueStateId dstRdrId $ \dstId -> do
+            addTransition (trans{stSrc=srcId, stDst=dstId})
+            let effectEvents = getAllEventsFromEffects (stEffects trans)
+                effectActions = getAllActionsFromEffects (stEffects trans)
+                triggerEvents = stTriggers trans
+            TSL.modify $ \st -> st{
+                gsEvents = S.union (gsEvents st) (S.fromList (effectEvents ++ triggerEvents)),
+                gsActions = S.union (gsActions st) (S.fromList effectActions)
+                }
+
+runPseudoTransitionM :: (SisTransition RdrId) -> SummaryM ()
+runPseudoTransitionM trans = return ()
 
 runRegionDeclsM :: [[RdrDecl]] -> SummaryM [SisRegion Id]
 runRegionDeclsM declss = do
@@ -79,6 +110,16 @@ runRegionDeclsM declss = do
         id <- newRegionId
         vertices <- runDeclsM decls
         addRegionM "" id (map stnId vertices) Nothing []
+
+ifUniqueStateId :: RdrId -> (Id -> SummaryM ()) -> SummaryM ()
+ifUniqueStateId rdrId action = do
+    stateLookup <- TSL.gets gsStateLookup
+    let stateIds = lookupStateFromRdrId stateLookup rdrId
+    if (null stateIds)
+    then addError $ "Unknown state: " ++ (show rdrId)
+    else if (length stateIds > 1)
+            then addError $ "State '" ++ (show rdrId) ++ "' is ambiguous"
+            else action (head stateIds)
 
 getScope :: SummaryM [String]
 getScope = TSL.gets gsScope
@@ -154,10 +195,13 @@ addRegionM name id vertices initial finals = do
     TSL.modify (\st -> st{ gsRegionMap=regionMap'})
     return region
 
-addBehaviorToStateM :: Id -> SisBehavior -> SummaryM ()
-addBehaviorToStateM stateId behavior = do
+addBehaviorToStateM :: SisBehavior -> Id -> SummaryM ()
+addBehaviorToStateM behavior stateId = do
     stateMap <- TSL.gets gsStateMap
     let state = (IM.!) stateMap stateId
         state' = state{stnBehaviors=(behavior:stnBehaviors state)} 
         stateMap' = IM.insert stateId state' stateMap
     TSL.modify (\st -> st{ gsStateMap=stateMap' })
+
+addTransition :: SisTransition Id -> SummaryM ()
+addTransition t = TSL.state (\gs -> ((), gs{gsTransitions=t:(gsTransitions gs)}))

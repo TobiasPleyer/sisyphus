@@ -9,8 +9,21 @@ data RdrDecl = StateDecl String [[RdrDecl]]
              | TransDecl (SisTransition RdrId)
              deriving (Show)
 
+isStateDecl :: RdrDecl -> Bool
+isStateDecl (StateDecl _ _) = True
+isStateDecl _ = False
+
+isBehaviorDecl :: RdrDecl -> Bool
+isBehaviorDecl (BehaviorDecl _ _) = True
+isBehaviorDecl _ = False
+
+isTransDecl :: RdrDecl -> Bool
+isTransDecl (TransDecl _) = True
+isTransDecl _ = False
+
 data RdrId = UnqualId String
            | QualId [String]
+           deriving(Eq)
 
 instance Show RdrId where
   show (UnqualId id) = id
@@ -69,18 +82,18 @@ data SisState a =
 data SisBehavior = SBEntry [SisEffect]
                  | SBExit [SisEffect]
                  | SBDoActivity [SisEffect]
-                 deriving (Show)
+                 deriving (Eq,Show)
 
 data SisEffect = SE {
     seKind :: SisEffectKind
   , seName :: String
   }
-  deriving (Show)
+  deriving (Eq,Show)
 
 data SisEffectKind = SEKEvent
                    | SEKAction
                    | SEKDoCall
-                   deriving (Show)
+                   deriving (Eq,Show)
 
 data SisPseudoState = SPSInitial
                     | SPSFinal
@@ -92,14 +105,14 @@ data SisPseudoState = SPSInitial
                     | SPSDeepHistory
                     | SPSEntryPoint
                     | SPSExitPoint
-                    deriving (Show)
+                    deriving (Eq,Show)
 
 data SisTransition a =
   ST {
     stKind :: SisTransitionKind
   , stTriggers :: [String]
   , stGuard :: Maybe Guard
-  , stBehaviors :: [SisEffect]
+  , stEffects :: [SisEffect]
   , stSrc :: a
   , stDst :: a
   }

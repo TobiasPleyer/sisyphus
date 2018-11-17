@@ -11,7 +11,7 @@ import qualified Data.IntMap.Strict as IM
 import qualified Data.Set as S
 
 import Sisyphus.Types
-import Sisyphus.SisSyn (RdrId(..))
+import Sisyphus.SisSyn
 
 
 -- | Encode a Haskell String to a list of Word8 values, in UTF8 format.
@@ -80,3 +80,27 @@ lookupStateFromRdrId stateLookup rdrId =
   in case candidates of
     Nothing -> []
     Just cs -> map snd (filter ((prefix `isPrefixOf`) . fst) cs)
+
+
+hasPseudoStates :: SisTransition RdrId -> Bool
+hasPseudoStates trans = ((stSrc trans) == (UnqualId "[*]")) || ((stDst trans) == (UnqualId "[*]"))
+
+
+getAllBehaviorEvents :: SisBehavior -> [String]
+getAllBehaviorEvents (SBEntry es) = getAllEventsFromEffects es
+getAllBehaviorEvents (SBExit es) = getAllEventsFromEffects es
+getAllBehaviorEvents (SBDoActivity es) = getAllEventsFromEffects es
+
+
+getAllBehaviorActions :: SisBehavior -> [String]
+getAllBehaviorActions (SBEntry as) = getAllActionsFromEffects as
+getAllBehaviorActions (SBExit as) = getAllActionsFromEffects as
+getAllBehaviorActions (SBDoActivity as) = getAllActionsFromEffects as
+
+
+getAllEventsFromEffects :: [SisEffect] -> [String]
+getAllEventsFromEffects es = map seName $ filter ((==SEKEvent) . seKind) es
+
+
+getAllActionsFromEffects :: [SisEffect] -> [String]
+getAllActionsFromEffects es = map seName $ filter ((==SEKAction) . seKind) es

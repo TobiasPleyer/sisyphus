@@ -125,18 +125,6 @@ action : '@' ID { SE SEKAction $2 }
 
 mkTransDecl kind src dst (trig,guard,effs) = TransDecl $ ST kind [trig] guard effs src dst
 
-isStateDecl :: RdrDecl -> Bool
-isStateDecl (StateDecl _ _) = True
-isStateDecl _ = False
-
-isBehaviorDecl :: RdrDecl -> Bool
-isBehaviorDecl (BehaviorDecl _ _) = True
-isBehaviorDecl _ = False
-
-isTransDecl :: RdrDecl -> Bool
-isTransDecl (TransDecl _) = True
-isTransDecl _ = False
-
 happyError :: P a
 happyError = failP "parse error"
 
