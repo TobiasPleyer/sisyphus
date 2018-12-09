@@ -3,325 +3,315 @@
 module Sisyphus.Compile where
 
 
-import Control.Monad (forM_, mapM_)
+import Control.Monad (forM, forM_, mapM_, when)
 import Data.Foldable (traverse_)
 import qualified Control.Monad.Trans.State.Lazy as TSL
+import qualified Data.Array as A
 import qualified Data.Map.Strict as M
+import qualified Data.IntMap.Strict as IM
 import qualified Data.Set as S
+import Data.Maybe (isJust)
+import System.Exit (exitFailure, exitSuccess, exitWith, ExitCode(..))
+import System.IO (stderr, hPutStr)
+import System.FilePath
+import Text.Show.Pretty (pPrint)
 
-import Sisyphus.Types
-import Sisyphus.Util (dedupeList, addIngoingTransition, addOutgoingTransition)
+import Sisyphus.SisSyn
+import Sisyphus.Lexer
+import Sisyphus.Parser
+import Sisyphus.Util
 
 
-runChecks :: GrammarSummary -> GrammarSummary
-runChecks gs = flip TSL.execState gs $ do
-    checkDuplicates
-    checkStates (smStates (stateMachine gs))
-    checkTransitions (smTransitions (stateMachine gs))
-    checkFinal
+bye :: String -> IO a
+bye s = putStr s >> exitWith ExitSuccess
 
+die :: String -> IO a
+die s = hPutStr stderr s >> exitWith (ExitFailure 1)
+
+
+data GrammarSummary = GS
+  { gsStateIndex :: !Int
+  , gsRegionIndex :: !Int
+  , gsScope :: [String]
+  , gsEvents :: S.Set String
+  , gsActions :: S.Set String
+  , gsRegions :: [Id]
+  , gsTransitions :: [SisTransition Id]
+  , gsStateLookup :: M.Map String [([String],Id)]
+  , gsStateMap :: IM.IntMap (SisState Id)
+  , gsRegionMap :: IM.IntMap (SisRegion Id)
+  , gsWarnings :: [String]
+  , gsErrors :: [String]
+  } deriving (Show)
 
 type SummaryM = TSL.State GrammarSummary
 
+initialSummary :: GrammarSummary
+initialSummary = GS (-1) (-1) [] S.empty S.empty [] [] M.empty IM.empty IM.empty [] []
 
-checkDuplicates :: SummaryM ()
-checkDuplicates = do
-  dedupeEvents
-  dedupeActions
+compile :: Bool
+        -- ^ should warnings be treated as errors?
+        -> Bool
+        -- ^ should warnings be ignored
+        -> FilePath
+        -- ^ The file containing the state machine definition
+        -> IO StateMachine
+        -- ^ the final result should be a state machine in the IO Monad (or die)
+compile warnEqErr ignoreWarn file = do
+  let debug = True
+  str <- readFile file
+  decls <- case runP str parse of
+    Left (Just (AlexPn _ line col),err) ->
+            die (file ++ ":" ++ show line ++ ":" ++ show col
+                             ++ ": " ++ err ++ "\n")
+    Left (Nothing, err) ->
+            die (file ++ ": " ++ err ++ "\n")
 
-
-dedupeEvents = do
-  events <- getEvents
-  let (redefs,uniques) = dedupeList events
-  forM_ redefs $ \redef -> addWarning ("Event '" ++ redef ++ "' has already been defined")
-  setEvents uniques
-
-
-dedupeActions = do
-  actions <- getActions
-  let (redefs,uniques) = dedupeList actions
-  forM_ redefs $ \redef -> addWarning ("Action '" ++ redef ++ "' has already been defined")
-  setActions uniques
-
-
-checkFinal :: SummaryM ()
-checkFinal = do
-  checkUnusedEvents
-  checkUnusedActions
-  checkUnreachableStates
-  checkUnleavableStates
-
-
-checkUnusedEvents = getUnusedEvents >>= reportMany "Event" "unused"
-checkUnusedActions = getUnusedActions >>= reportMany "Action" "unused"
-checkUnreachableStates = getUnreachableStates >>= reportMany "State" "unreachable by any transition"
-checkUnleavableStates = getUnleavableStates >>= reportMany "State" "unleavable, but not a final state"
-
-
-report name issue item = addWarning (name ++ " '" ++ item ++ "' is " ++ issue)
-reportMany name issue = mapM_ $ report name issue
-
-
-checkStates = mapM_ checkState
-
-
-checkState :: State -> SummaryM ()
-checkState s@(State name attrs entries exits internals ingoings outgoings) = do
-  let exitEvents = (concatMap reactionEvents exits)
-      entryEvents = (concatMap reactionEvents entries)
-      internalEvents = (concatMap reactionEvents internals)
-      exitActions = (concatMap reactionActions exits)
-      entryActions = (concatMap reactionActions entries)
-      internalActions = (concatMap reactionActions internals)
-  traverse_ markEventsUsed [entryEvents, exitEvents, internalEvents]
-  traverse_ markActionsUsed [entryActions, exitActions, internalActions]
-  events <- getEvents
-  let unknownEvents = filter (flip notElem events) (concat [exitEvents, entryEvents, internalEvents])
-  reportMany "Event" "undefined - adding default" unknownEvents
-  forM_ unknownEvents addEvent
-  actions <- getActions
-  let unknownActions = filter (flip notElem actions) (concat [exitActions, entryActions, internalActions])
-  reportMany "Action" "undefined - adding default" unknownActions
-  forM_ unknownActions addAction
-
-
-checkTransitions = mapM_ checkTransition
-
-
-checkTransition :: TransitionSpec -> SummaryM ()
-checkTransition t@(TSpec src dst trig guards reactions) = do
+    Right (_,decls) -> return decls
+  when debug $ do
+    putStrLn "Declarations"
+    pPrint decls
+    putStrLn "------"
   let
-    transEvents = transitionEvents t
-    transActions = transitionActions t
-  markEventsUsed transEvents
-  markActionsUsed transActions
-  markStateLeavable src
-  markStateReachable dst
-  events <- getEvents
-  let unknownEvents = filter (flip notElem events) transEvents
-  reportMany "Event" "undefined - adding default" unknownEvents
-  forM_ unknownEvents addEvent
-  actions <- getActions
-  let unknownActions = filter (flip notElem actions) transActions
-  reportMany "Action" "undefined - adding default" unknownActions
-  forM_ unknownActions addAction
-  maybeSrcState <- getState src
-  case maybeSrcState of
-    Nothing -> do
-      report "State" "undefined - adding default" src
-      addState src (State src [] [] [] [] [] [t])
-    Just (srcState) -> do
-      let outgoings = stOutgoingTransitions srcState
-      addState src srcState{stOutgoingTransitions=t:outgoings}
-  maybeDstState <- getState dst
-  case maybeDstState of
-    Nothing -> do
-      report "State" "undefined - adding default" dst
-      addState dst (State dst [] [] [] [] [t] [])
-    Just (dstState) -> do
-      let ingoings = stIngoingTransitions dstState
-      addState dst dstState{stIngoingTransitions=t:ingoings}
+    summary = runDecls decls
+    warnings = gsWarnings summary
+    errors = gsErrors summary
+    (ws,es) = if warnEqErr then ([],warnings ++ errors) else (warnings,errors)
+  when ((not $ null $ ws) && (not ignoreWarn)) $ do
+    putStrLn "== Warnings =="
+    mapM_ putStrLn ws
+  when (not $ null $ es) $ do
+    putStrLn "The following errors prevent further processing:"
+    putStrLn "== Errors =="
+    mapM_ putStrLn es
+    exitFailure
+  let
+    stateMachine = SM
+                    "SM"
+                    (S.toList $ gsEvents summary)
+                    (S.toList $ gsActions summary)
+                    (A.array (0, gsStateIndex summary) $ IM.toList $ gsStateMap summary)
+                    (A.array (0, gsRegionIndex summary) $ IM.toList $ gsRegionMap summary)
+                    (gsRegions summary)
+                    (gsTransitions summary)
+  when debug $ do
+    putStrLn "State Machine"
+    pPrint stateMachine
+    putStrLn "------"
+  return stateMachine
 
+runDecls :: [RdrDecl] -> GrammarSummary
+runDecls decls = TSL.execState (
+    do
+        toplevelRegions <- runRegionDeclsM [decls]
+        TSL.modify (\st -> st{gsRegions=(map srIndex toplevelRegions)})
+    ) initialSummary
 
-allEvents :: [Reaction] -> [Event]
-allEvents reactions = map getEvent $ filter isEventEmit reactions
-  where
-    getEvent (EventEmit e) = e
+runDeclsM :: [RdrDecl] -> SummaryM [SisState Id]
+runDeclsM decls = do
+    rIndex <- currentRegionIndex
+    states <- runStateDeclsM rIndex decls
+    runBehaviorDeclsM decls
+    runTransitionDeclsM decls
+    return states
 
+runStateDeclsM :: Id -> [RdrDecl] -> SummaryM [SisState Id]
+runStateDeclsM rIndex decls = do
+    let stateDecls = filter isStateDecl decls
+    forM stateDecls $ \(StateDecl name declss) -> do
+        id <- newStateId
+        pushScope name
+        regionIds <- runRegionDeclsM declss
+        popScope
+        addNormalStateM name id rIndex [] (map srIndex regionIds)
 
-allActions :: [Reaction] -> [Action]
-allActions reactions = map getAction $ filter isActionCall reactions
-  where
-    getAction (ActionCall a) = a
+runBehaviorDeclsM :: [RdrDecl] -> SummaryM ()
+runBehaviorDeclsM decls = do
+    let behaviorDecls = filter isBehaviorDecl decls
+    stateLookup <- TSL.gets gsStateLookup
+    stateMap <- TSL.gets gsStateMap
+    forM_ behaviorDecls $ \(BehaviorDecl rdrId behavior) -> do
+        ifUniqueStateId rdrId $ \id -> do
+            addBehaviorToStateM behavior id
+            let events = getAllBehaviorEvents behavior
+                actions = getAllBehaviorActions behavior
+            TSL.modify $ \st -> st{
+                gsEvents = S.union (gsEvents st) (S.fromList events),
+                gsActions = S.union (gsActions st) (S.fromList actions)
+                }
 
+runTransitionDeclsM :: [RdrDecl] -> SummaryM ()
+runTransitionDeclsM decls = do
+    let transitionDecls = filter isTransDecl decls
+    forM_ transitionDecls $ \(TransDecl trans) -> do
+        if (hasPseudoStates trans)
+        then runPseudoTransitionM trans
+        else runNormalTransitionM trans
 
-reactionEvents :: ReactionSpec -> [Event]
-reactionEvents r@(RSpec trigger guards reactions) =
-  case trigger of
-    Just e -> e:es
-    Nothing -> es
-  where
-    es = allEvents reactions
+runNormalTransitionM :: (SisTransition RdrId) -> SummaryM ()
+runNormalTransitionM trans = do
+    let srcRdrId = stSrc trans
+        dstRdrId = stDst trans
+    ifUniqueStateId srcRdrId $ \srcId ->
+        ifUniqueStateId dstRdrId $ \dstId -> do
+            addTransition (trans{stSrc=srcId, stDst=dstId})
+            let effectEvents = getAllEventsFromEffects (stEffects trans)
+                effectActions = getAllActionsFromEffects (stEffects trans)
+                triggerEvent = stTrigger trans
+            TSL.modify $ \st -> st{
+                gsEvents = S.union (gsEvents st) (S.fromList (maybe effectEvents (: effectEvents) triggerEvent)),
+                gsActions = S.union (gsActions st) (S.fromList effectActions)
+                }
 
+runPseudoTransitionM :: (SisTransition RdrId) -> SummaryM ()
+runPseudoTransitionM trans = do
+    if (isInitialTrans trans)
+    then ifUniqueStateId (stDst trans) markStateInitialM
+    else if (isFinalTrans trans)
+         then ifUniqueStateId (stSrc trans) markStateFinalM
+         else addError $ "Unknown pseudo state in transition " ++ (show trans)
 
-reactionActions :: ReactionSpec -> [Action]
-reactionActions r@(RSpec trigger guards reactions) = allActions reactions
+runRegionDeclsM :: [[RdrDecl]] -> SummaryM [SisRegion Id]
+runRegionDeclsM declss = do
+    forM declss $ \decls -> do
+        id <- newRegionId
+        addEmptyRegion "" id
+        vertices <- runDeclsM decls
+        regionMap <- getRegionMap
+        let region = (IM.!) regionMap id
+            region' = region{ srVertices=(map stnId vertices) }
+            regionMap' = IM.insert id region' regionMap
+        TSL.modify (\st -> st{ gsRegionMap=regionMap' })
+        return region'
 
+ifUniqueStateId :: RdrId -> (Id -> SummaryM ()) -> SummaryM ()
+ifUniqueStateId rdrId action = do
+    stateLookup <- TSL.gets gsStateLookup
+    let stateIds = lookupStateFromRdrId stateLookup rdrId
+    if (null stateIds)
+    then addError $ "Unknown state: " ++ (show rdrId)
+    else if (length stateIds > 1)
+            then addError $ "State '" ++ (show rdrId) ++ "' is ambiguous"
+            else action (head stateIds)
 
-transitionEvents :: TransitionSpec -> [Event]
-transitionEvents t@(TSpec src dst trigger guards reactions) =
-  case trigger of
-    Just e -> e:es
-    Nothing -> es
-  where
-    es = allEvents reactions
+getScope :: SummaryM [String]
+getScope = TSL.gets gsScope
 
+setScope :: [String] -> SummaryM ()
+setScope scope = TSL.modify (\st -> st{gsScope=scope})
 
-transitionActions :: TransitionSpec -> [Action]
-transitionActions t@(TSpec src dst trigger guards reactions) = allActions reactions
+pushScope :: String -> SummaryM ()
+pushScope name = TSL.modify (\st -> st{gsScope=(name:gsScope st)})
 
--- The summary state monad and the required utility functions
+popScope :: SummaryM String
+popScope = do
+    scope <- getScope
+    case scope of
+        (s:ss) -> setScope ss >> return s
+        _      -> error "Empty stack!"
 
-getStateMachine :: SummaryM StateMachine
-getStateMachine = TSL.state (\gs -> (stateMachine gs, gs))
+newStateId :: SummaryM Id
+newStateId = do
+    new_id <- (+1) <$> TSL.gets gsStateIndex
+    TSL.modify (\st -> st{gsStateIndex=new_id})
+    return new_id
 
-setStateMachine :: StateMachine -> SummaryM ()
-setStateMachine sm = TSL.state (\gs -> ((), gs{stateMachine=sm}))
+newRegionId :: SummaryM Id
+newRegionId = do
+    new_id <- (+1) <$> TSL.gets gsRegionIndex
+    TSL.modify (\st -> st{gsRegionIndex=new_id})
+    return new_id
 
+currentRegionIndex = TSL.gets gsRegionIndex
 
-getName :: SummaryM String
-getName = do
-  sm <- getStateMachine
-  return $ smName sm
-
-
-getEvents :: SummaryM [Event]
-getEvents = smEvents <$> getStateMachine
-
-setEvents :: [Event] -> SummaryM ()
-setEvents es = do
-  sm <- getStateMachine
-  setStateMachine $ sm{smEvents=es}
-
-addEvent :: Event -> SummaryM ()
-addEvent e = do
-  es <- getEvents
-  setEvents (e:es)
-
-
-getActions :: SummaryM [Action]
-getActions = smActions <$> getStateMachine
-
-setActions :: [Action] -> SummaryM ()
-setActions as = do
-  sm <- getStateMachine
-  setStateMachine $ sm{smActions=as}
-
-addAction :: Action -> SummaryM ()
-addAction a = do
-  as <- getActions
-  setActions (a:as)
-
-
-getStateMap :: SummaryM (M.Map String State)
-getStateMap = smStates <$> getStateMachine
-
-getStateNames :: SummaryM [String]
-getStateNames = (M.keys . smStates) <$> getStateMachine
-
-getState :: String -> SummaryM (Maybe State)
-getState s = (M.lookup s) <$> getStateMap
-
-setStateMap :: (M.Map String State) -> SummaryM ()
-setStateMap ss = do
-  sm <- getStateMachine
-  setStateMachine $ sm{smStates=ss}
-
-addState :: String -> State -> SummaryM ()
-addState n s = do
-  sm <- getStateMap
-  setStateMap (M.insert n s sm)
-
-addDefaultState :: String -> SummaryM ()
-addDefaultState n = addState n (State n [] [] [] [] [] [])
-
-
-getTransitions :: SummaryM [TransitionSpec]
-getTransitions = smTransitions <$> getStateMachine
-
-setTransitions :: [TransitionSpec] -> SummaryM ()
-setTransitions ts = do
-  sm <- getStateMachine
-  setStateMachine $ sm{smTransitions=ts}
-
-
-getUnusedEvents :: SummaryM (S.Set Event)
-getUnusedEvents = TSL.state (\gs -> (unusedEvents gs, gs))
-
-setUnusedEvents :: (S.Set Event) -> SummaryM ()
-setUnusedEvents ues = TSL.state (\gs -> ((), gs{unusedEvents=ues}))
-
-
-getUnusedActions :: SummaryM (S.Set Action)
-getUnusedActions = TSL.state (\gs -> (unusedActions gs, gs))
-
-setUnusedActions :: (S.Set Action) -> SummaryM ()
-setUnusedActions uas = TSL.state (\gs -> ((), gs{unusedActions=uas}))
-
-
-getUnreachableStates :: SummaryM (S.Set String)
-getUnreachableStates = TSL.state (\gs -> (unreachableStates gs, gs))
-
-setUnreachableStates :: (S.Set String) -> SummaryM ()
-setUnreachableStates urs = TSL.state (\gs -> ((), gs{unreachableStates=urs}))
-
-
-getUnleavableStates :: SummaryM (S.Set String)
-getUnleavableStates = TSL.state (\gs -> (unleavableStates gs, gs))
-
-setUnleavableStates :: (S.Set String) -> SummaryM ()
-setUnleavableStates uls = TSL.state (\gs -> ((), gs{unleavableStates=uls}))
-
+lookupState :: String -> SummaryM ([(Scope,Id)])
+lookupState s = (M.findWithDefault [] s) <$> (TSL.gets gsStateLookup)
 
 getWarnings :: SummaryM [String]
-getWarnings = TSL.state (\gs -> (warnings gs, gs))
+getWarnings = TSL.gets gsWarnings
 
 setWarnings :: [String] -> SummaryM ()
-setWarnings ws = TSL.state (\gs -> ((), gs{warnings=ws}))
+setWarnings ws = TSL.state (\gs -> ((), gs{gsWarnings=ws}))
 
 addWarning :: String -> SummaryM ()
-addWarning w = TSL.state (\gs -> ((), gs{warnings=w:(warnings gs)}))
-
+addWarning w = TSL.state (\gs -> ((), gs{gsWarnings=w:(gsWarnings gs)}))
 
 getErrors :: SummaryM [String]
-getErrors = TSL.state (\gs -> (errors gs, gs))
+getErrors = TSL.gets gsErrors
 
 setErrors :: [String] -> SummaryM ()
-setErrors es = TSL.state (\gs -> ((), gs{errors=es}))
+setErrors es = TSL.state (\gs -> ((), gs{gsErrors=es}))
 
 addError :: String -> SummaryM ()
-addError e = TSL.state (\gs -> ((), gs{errors=e:(errors gs)}))
+addError e = TSL.state (\gs -> ((), gs{gsErrors=e:(gsErrors gs)}))
 
+getStateMap :: SummaryM (IM.IntMap (SisState Id))
+getStateMap = TSL.gets gsStateMap
 
-markEventUsed :: Event -> SummaryM ()
-markEventUsed e = do
-  events <- getUnusedEvents
-  let events' = S.delete e events
-  setUnusedEvents events'
+getRegionMap :: SummaryM (IM.IntMap (SisRegion Id))
+getRegionMap = TSL.gets gsRegionMap
 
+addNormalStateM :: String -> Id -> Id -> [SisBehavior] -> [Id] -> SummaryM (SisState Id)
+addNormalStateM name id index behaviors regions = do
+    scope <- getScope
+    stateLookup <- TSL.gets gsStateLookup
+    stateMap <- TSL.gets gsStateMap
+    let
+        state = STNormal name id index behaviors regions [] [] []
+        stateMap' = IM.insert id state stateMap
+        stateLookup' = M.alter (\ms -> case ms of
+                                  Nothing -> Just [(scope,id)]
+                                  Just ss -> Just ((scope,id):ss)) name stateLookup
+    TSL.modify (\st -> st{ gsStateMap=stateMap'
+                         , gsStateLookup=stateLookup' })
+    return state
 
-markEventsUsed :: [Event] -> SummaryM ()
-markEventsUsed = mapM_ markEventUsed
+addRegionM :: String -> Id -> [Id] -> (Maybe Id) -> [Id] -> SummaryM (SisRegion Id)
+addRegionM name id vertices initial finals = do
+    regionMap <- getRegionMap
+    let region = SR name id vertices initial finals
+        regionMap' = IM.insert id region regionMap
+    TSL.modify (\st -> st{ gsRegionMap=regionMap' })
+    return region
 
+addEmptyRegion :: String -> Id -> SummaryM (SisRegion Id)
+addEmptyRegion name id = addRegionM name id [] Nothing []
 
-markActionUsed :: Action -> SummaryM ()
-markActionUsed a = do
-  actions <- getUnusedActions
-  let actions' = S.delete a actions
-  setUnusedActions actions'
+addBehaviorToStateM :: SisBehavior -> Id -> SummaryM ()
+addBehaviorToStateM behavior stateId = do
+    stateMap <- TSL.gets gsStateMap
+    let state = (IM.!) stateMap stateId
+        state' = state{stnBehaviors=(behavior:stnBehaviors state)} 
+        stateMap' = IM.insert stateId state' stateMap
+    TSL.modify (\st -> st{ gsStateMap=stateMap' })
 
+addTransition :: SisTransition Id -> SummaryM ()
+addTransition t = TSL.state (\gs -> ((), gs{gsTransitions=t:(gsTransitions gs)}))
 
-markActionsUsed :: [Action] -> SummaryM ()
-markActionsUsed = mapM_ markActionUsed
+markStateInitialM :: Id -> SummaryM ()
+markStateInitialM stateId = do
+    stateMap <- getStateMap
+    regionMap <- getRegionMap
+    let state = (IM.!) stateMap stateId
+        regionIndex = stnIndex state
+        region = (IM.!) regionMap regionIndex
+    if (isJust (srInitial region))
+    then addError $ "Region of state " ++ (stnName state) ++ " already has an intial state"
+    else do
+         let region' = region{ srInitial = (Just stateId) }
+             regionMap' = IM.insert regionIndex region' regionMap
+         TSL.modify (\st -> st{ gsRegionMap=regionMap' })
 
-
-markStateReachable :: String -> SummaryM ()
-markStateReachable s = do
-  states <- getUnreachableStates
-  let states' = S.delete s states
-  setUnreachableStates states'
-
-
-markStatesReachable :: [String] -> SummaryM ()
-markStatesReachable = mapM_ markStateReachable
-
-
-markStateLeavable :: String -> SummaryM ()
-markStateLeavable s = do
-  states <- getUnleavableStates
-  let states' = S.delete s states
-  setUnleavableStates states'
-
-
-markStatesLeavable :: [String] -> SummaryM ()
-markStatesLeavable = mapM_ markStateLeavable
+markStateFinalM :: Id -> SummaryM ()
+markStateFinalM stateId = do
+    stateMap <- getStateMap
+    regionMap <- getRegionMap
+    let state = (IM.!) stateMap stateId
+        regionIndex = stnIndex state
+        region = (IM.!) regionMap regionIndex
+    if (stateId `elem` (srFinals region))
+    then addError $ "State " ++ (stnName state) ++ " has been marked final more than once"
+    else do
+         let region' = region{ srFinals = stateId:(srFinals region) }
+             regionMap' = IM.insert regionIndex region' regionMap
+         TSL.modify (\st -> st{ gsRegionMap=regionMap' })

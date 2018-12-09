@@ -10,7 +10,7 @@ import Control.Monad ( liftM, ap )
 import Data.List (break)
 import Data.Word (Word8)
 import qualified Sisyphus.Util as Util
-import Sisyphus.SisSyn
+import Sisyphus.SisSyn hiding (Action)
 
 }
 

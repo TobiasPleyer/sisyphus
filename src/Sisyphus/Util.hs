@@ -10,7 +10,6 @@ import qualified Data.Map.Strict as M
 import qualified Data.IntMap.Strict as IM
 import qualified Data.Set as S
 
-import Sisyphus.Types
 import Sisyphus.SisSyn
 
 
@@ -43,31 +42,31 @@ dedupeList items =
   in (redefs,uniques)
 
 
-addIngoingTransition :: TransitionSpec -> State -> State
+addIngoingTransition :: (SisTransition a) -> (SisState a) -> (SisState a)
 addIngoingTransition t s =
   let
-    ins = stIngoingTransitions s
-    s' = s{stIngoingTransitions=(t:ins)}
+    ins = stnIngoingTransitions s
+    s' = s{stnIngoingTransitions=(t:ins)}
   in s'
 
 
-addOutgoingTransition :: TransitionSpec -> State -> State
+addOutgoingTransition :: (SisTransition a) -> (SisState a) -> (SisState a)
 addOutgoingTransition t s =
   let
-    outs = stOutgoingTransitions s
-    s' = s{stOutgoingTransitions=(t:outs)}
+    outs = stnOutgoingTransitions s
+    s' = s{stnOutgoingTransitions=(t:outs)}
   in s'
 
 
-isTriggeredBy :: State -> Event -> Bool
+isTriggeredBy :: (SisState a) -> Event -> Bool
 isTriggeredBy state event = not
                           . null
                           . filter (==event)
                           . map fromJust
                           . filter isJust
                           . concat
-                          $ [ map tspecTrigger (stOutgoingTransitions state)
-                            , map rspecTrigger (stInternalReactions state)
+                          $ [ map stTrigger (stnOutgoingTransitions state)
+                            , map stTrigger (stnInternalTransitions state)
                             ]
 
 
@@ -94,6 +93,36 @@ isFinalTrans :: SisTransition RdrId -> Bool
 isFinalTrans trans = ((stDst trans) == (UnqualId "[*]"))
 
 
+isEntryReaction :: SisBehavior -> Bool
+isEntryReaction (SBEntry _) = True
+isEntryReaction _ = False
+
+
+isExitReaction :: SisBehavior -> Bool
+isExitReaction (SBExit _) = True
+isExitReaction _ = False
+
+
+isDoActivity :: SisBehavior -> Bool
+isDoActivity (SBDoActivity _) = True
+isDoActivity _ = False
+
+
+getAllEntries :: [SisBehavior] -> [SisEffect]
+getAllEntries = concat . map unwrap . filter isEntryReaction
+    where unwrap (SBEntry es) = es
+
+
+getAllExits :: [SisBehavior] -> [SisEffect]
+getAllExits = concat . map unwrap . filter isExitReaction
+    where unwrap (SBExit es) = es
+
+
+getAllDoActivities :: [SisBehavior] -> [SisEffect]
+getAllDoActivities = concat . map unwrap . filter isDoActivity
+    where unwrap (SBDoActivity es) = es
+
+
 getAllBehaviorEvents :: SisBehavior -> [String]
 getAllBehaviorEvents (SBEntry es) = getAllEventsFromEffects es
 getAllBehaviorEvents (SBExit es) = getAllEventsFromEffects es
@@ -112,3 +141,19 @@ getAllEventsFromEffects es = map seName $ filter ((==SEKEvent) . seKind) es
 
 getAllActionsFromEffects :: [SisEffect] -> [String]
 getAllActionsFromEffects es = map seName $ filter ((==SEKAction) . seKind) es
+
+
+isInternalTransition :: SisTransition a -> Bool
+isInternalTransition t = (stKind t) == STKInternal
+
+
+isExternalTransition :: SisTransition a -> Bool
+isExternalTransition t = (stKind t) == STKExternal
+
+
+getAllInternalTransitions :: [SisTransition a] -> [SisTransition a]
+getAllInternalTransitions = filter isInternalTransition
+
+
+getAllExternalTransitions :: [SisTransition a] -> [SisTransition a]
+getAllExternalTransitions = filter isInternalTransition

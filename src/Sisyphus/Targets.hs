@@ -5,11 +5,11 @@ where
 
 import System.Exit (ExitCode(..), exitWith)
 import qualified Data.Map.Strict as M
-import Sisyphus.Language.Graphviz
+import Sisyphus.Language.PlantUML
 import Sisyphus.Language.C
 
 
-supportedTargets = M.fromList [ ("Graphviz", renderGraphviz)
+supportedTargets = M.fromList [ ("PlantUML", renderPlantUML)
                               , ("C", renderCSimple)
                               , ("C::Simple", renderCSimple)
                               ]

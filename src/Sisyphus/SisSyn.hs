@@ -1,7 +1,15 @@
+{-# LANGUAGE RecordWildCards #-}
 
 module Sisyphus.SisSyn where
 
 import Data.List (intersperse)
+import qualified Data.Map.Strict as M
+import qualified Data.Array as A
+
+
+type Id = Int
+type Event  = String
+type Action = String
 
 
 data RdrDecl = StateDecl String [[RdrDecl]]
@@ -47,12 +55,14 @@ data Operator = OpEQ
               | OpGE
               deriving (Show)
 
-data SisStateMachine a = SSM {
-    ssmName :: String
-  , ssmEvents :: [String]
-  , ssmActions :: [String]
-  , ssmRegions :: [a]
-  , ssmTransitions :: [SisTransition a]
+data StateMachine = SM {
+    smName :: String
+  , smEvents :: [String]
+  , smActions :: [String]
+  , smStateArray :: A.Array Int (SisState Id)
+  , smRegionArray :: A.Array Int (SisRegion Id)
+  , smTopRegions :: [Id]
+  , smTransitions :: [SisTransition Id]
   }
   deriving (Show)
 
@@ -72,6 +82,9 @@ data SisState a =
   , stnIndex :: a
   , stnBehaviors :: [SisBehavior]
   , stnRegions :: [a]
+  , stnInternalTransitions :: [SisTransition a]
+  , stnIngoingTransitions  :: [SisTransition a]
+  , stnOutgoingTransitions :: [SisTransition a]
   }
   |
   STSubmachine
@@ -110,7 +123,7 @@ data SisPseudoState = SPSInitial
 data SisTransition a =
   ST {
     stKind :: SisTransitionKind
-  , stTriggers :: [String]
+  , stTrigger :: Maybe String
   , stGuard :: Maybe Guard
   , stEffects :: [SisEffect]
   , stSrc :: a

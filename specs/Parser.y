@@ -106,11 +106,14 @@ rid1 :: { [String] }
     : rid1 ID '.'  { $2 : $1 }
     | ID '.'       { [$1] }
 
-tbody : {- EMPTY -} { ("",Nothing,[]) }
+tbody : {- EMPTY -} { (Nothing,Nothing,[]) }
       | ':' tbody2  { $2 }
 
-tbody2 : ID maybe_guard              { ($1,$2,[]) }
-       | ID maybe_guard '/' actions  { ($1,$2,$4) }
+tbody2 : maybe_id maybe_guard              { ($1,$2,[]) }
+       | maybe_id maybe_guard '/' actions  { ($1,$2,$4) }
+
+maybe_id : ID          { Just $1 }
+         | {- EMPTY -} { Nothing }
 
 maybe_guard : {- EMPTY -} { Nothing }
 
@@ -123,7 +126,7 @@ action : '@' ID { SE SEKAction $2 }
 
 {
 
-mkTransDecl kind src dst (trig,guard,effs) = TransDecl $ ST kind [trig] guard effs src dst
+mkTransDecl kind src dst (trig,guard,effs) = TransDecl $ ST kind trig guard effs src dst
 
 happyError :: P a
 happyError = failP "parse error"
