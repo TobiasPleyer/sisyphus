@@ -3,8 +3,8 @@
 module Sisyphus.SisSyn where
 
 import Data.List (intersperse)
-import qualified Data.Map.Strict as M
 import qualified Data.Array as A
+import qualified Data.Map.Strict as M
 
 
 type Id = Int
@@ -57,10 +57,10 @@ data Operator = OpEQ
 
 data StateMachine = SM {
     smName :: String
-  , smEvents :: [String]
-  , smActions :: [String]
-  , smStateArray :: A.Array Int (SisState Id)
-  , smRegionArray :: A.Array Int (SisRegion Id)
+  , smEvents :: A.Array Int String
+  , smActions :: A.Array Int String
+  , smStates :: A.Array Int (SisState Id)
+  , smRegions :: A.Array Int (SisRegion Id)
   , smTopRegions :: [Id]
   , smTransitions :: [SisTransition Id]
   }

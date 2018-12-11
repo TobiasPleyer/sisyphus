@@ -29,7 +29,7 @@ defaultTemplateLoader fn =
       Right contents -> return (Just contents)
       Left _ -> return Nothing
   where
-    tfn = "templates/" ++ fn
+    tfn = "templates" </> fn
 
     loadFile :: FilePath -> IO String
     loadFile f = openFile f ReadMode >>= hGetContents

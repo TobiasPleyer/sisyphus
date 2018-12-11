@@ -90,10 +90,12 @@ compile warnEqErr ignoreWarn file = do
     regionArray = (A.array (0, gsRegionIndex summary) $ IM.toList $ gsRegionMap summary)
     stateMap = connectTransitions (gsTransitions summary) (gsStateMap summary)
     stateArray = (A.array (0, gsStateIndex summary) $ IM.toList $ stateMap)
+    eventList = S.toList $ gsEvents summary
+    actionList = S.toList $ gsActions summary
     stateMachine = SM
-                    "SM"
-                    (S.toList $ gsEvents summary)
-                    (S.toList $ gsActions summary)
+                    "Test_SM"
+                    (A.listArray (0, length eventList - 1) eventList)
+                    (A.listArray (0, length actionList - 1) actionList)
                     stateArray
                     regionArray
                     (gsRegions summary)
@@ -116,7 +118,7 @@ connectTransitions ts ss = foldr' addInAndOutgoing ss ts where
     addInAndOutgoing t@ST{..} ss = case stKind of
         STKInternal -> IM.update (Just . addInternalTransition t) stSrc ss
         STKExternal -> ( (IM.update (Just . addOutgoingTransition t) stSrc)
-                       . (IM.update (Just . addIngoingTransition t) stDst)
+                       . (IM.update (Just . addIngoingTransition t ) stDst)
                        ) ss
         STKLocal -> ss
 

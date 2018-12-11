@@ -43,7 +43,7 @@ main = do
   opts <- cmdArgsRun options
   let file = head $ files opts
   stateMachine <- compile (warn_is_error opts) (no_warnings opts) file
-  when ((snd (A.bounds (smRegionArray stateMachine))) > 1) $ do
+  when ((snd (A.bounds (smRegions stateMachine))) > 1) $ do
     putStrLn "Currently Sisyphus does not support hierarchical state machines."
     exitFailure
   forM_ (targets opts) $ renderTarget stateMachine (outputdir opts)
