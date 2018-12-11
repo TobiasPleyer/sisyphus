@@ -58,6 +58,14 @@ addOutgoingTransition t s =
   in s'
 
 
+addInternalTransition :: (SisTransition a) -> (SisState a) -> (SisState a)
+addInternalTransition t s =
+  let
+    ints = stnInternalTransitions s
+    s' = s{stnInternalTransitions=(t:ints)}
+  in s'
+
+
 isTriggeredBy :: (SisState a) -> Event -> Bool
 isTriggeredBy state event = not
                           . null

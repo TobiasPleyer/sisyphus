@@ -7,6 +7,7 @@ import Control.Monad (forM, forM_, mapM_, when)
 import Data.Foldable (traverse_)
 import qualified Control.Monad.Trans.State.Lazy as TSL
 import qualified Data.Array as A
+import Data.Foldable (foldr')
 import qualified Data.Map.Strict as M
 import qualified Data.IntMap.Strict as IM
 import qualified Data.Set as S
@@ -86,12 +87,15 @@ compile warnEqErr ignoreWarn file = do
     mapM_ putStrLn es
     exitFailure
   let
+    regionArray = (A.array (0, gsRegionIndex summary) $ IM.toList $ gsRegionMap summary)
+    stateMap = connectTransitions (gsTransitions summary) (gsStateMap summary)
+    stateArray = (A.array (0, gsStateIndex summary) $ IM.toList $ stateMap)
     stateMachine = SM
                     "SM"
                     (S.toList $ gsEvents summary)
                     (S.toList $ gsActions summary)
-                    (A.array (0, gsStateIndex summary) $ IM.toList $ gsStateMap summary)
-                    (A.array (0, gsRegionIndex summary) $ IM.toList $ gsRegionMap summary)
+                    stateArray
+                    regionArray
                     (gsRegions summary)
                     (gsTransitions summary)
   when debug $ do
@@ -106,6 +110,15 @@ runDecls decls = TSL.execState (
         toplevelRegions <- runRegionDeclsM [decls]
         TSL.modify (\st -> st{gsRegions=(map srIndex toplevelRegions)})
     ) initialSummary
+
+connectTransitions :: [SisTransition Id] -> (IM.IntMap (SisState Id)) -> (IM.IntMap (SisState Id))
+connectTransitions ts ss = foldr' addInAndOutgoing ss ts where
+    addInAndOutgoing t@ST{..} ss = case stKind of
+        STKInternal -> IM.update (Just . addInternalTransition t) stSrc ss
+        STKExternal -> ( (IM.update (Just . addOutgoingTransition t) stSrc)
+                       . (IM.update (Just . addIngoingTransition t) stDst)
+                       ) ss
+        STKLocal -> ss
 
 runDeclsM :: [RdrDecl] -> SummaryM [SisState Id]
 runDeclsM decls = do
