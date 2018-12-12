@@ -22,13 +22,13 @@ import Sisyphus.Util
 import Sisyphus.Language.Template
 
 
-renderCSimple :: StateMachine -> FilePath -> IO ()
-renderCSimple sm outDir = do
-  renderHeader sm outDir
-  renderSource sm outDir
+renderCSimple :: TemplateLoader -> StateMachine -> FilePath -> IO ()
+renderCSimple templateLoader sm outDir = do
+  renderHeader templateLoader sm outDir
+  renderSource templateLoader sm outDir
 
-renderHeader :: StateMachine -> FilePath -> IO ()
-renderHeader sm@SM{..} outDir = do
+renderHeader :: TemplateLoader -> StateMachine -> FilePath -> IO ()
+renderHeader templateLoader sm@SM{..} outDir = do
   let
     target = smName <.> "h"
     cHeaderTmpl = "C/fsm.h.tmpl"
@@ -40,11 +40,11 @@ renderHeader sm@SM{..} outDir = do
                         ]
             )
       )
-  renderFromFile context outDir cHeaderTmpl target
+  renderFromFile templateLoader context outDir cHeaderTmpl target
 
 
-renderSource :: StateMachine -> FilePath -> IO ()
-renderSource sm@SM{..} outDir = do
+renderSource :: TemplateLoader -> StateMachine -> FilePath -> IO ()
+renderSource templateLoader sm@SM{..} outDir = do
   let
     target = outDir </> smName <.> "c"
     -- We need a better checking here
@@ -58,8 +58,8 @@ renderSource sm@SM{..} outDir = do
                         ]
             )
       )
-  preTmpl <- parseGingerFile defaultTemplateLoader "C/fsm.c_pre.tmpl"
-  postTmpl <- parseGingerFile defaultTemplateLoader "C/fsm.c_post.tmpl"
+  preTmpl <- parseGingerFile templateLoader "C/fsm.c_pre.tmpl"
+  postTmpl <- parseGingerFile templateLoader "C/fsm.c_post.tmpl"
   case (liftA2 (,) preTmpl postTmpl) of
     Left err -> do
       printParseError err

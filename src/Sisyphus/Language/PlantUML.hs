@@ -13,11 +13,11 @@ import Text.Ginger
        (makeContextText, Template, toGVal, runGinger, parseGingerFile, VarName)
 import Text.Ginger.GVal (ToGVal, GVal)
 import Sisyphus.SisSyn
-import Sisyphus.Language.Template (defaultTemplateLoader, renderTemplate)
+import Sisyphus.Language.Template
 
 
 gvTemplateSimple = "PlantUML/fsm.plant.tmpl"
 
 
-renderPlantUML :: StateMachine -> FilePath -> IO ()
-renderPlantUML sm outDir = undefined
+renderPlantUML :: TemplateLoader -> StateMachine -> FilePath -> IO ()
+renderPlantUML templateLoader sm outDir = undefined

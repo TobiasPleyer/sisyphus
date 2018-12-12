@@ -13,6 +13,7 @@ import Sisyphus.Parser
 import Sisyphus.SisSyn
 import Sisyphus.Targets (supportedTargets, renderTarget)
 import Sisyphus.Compile
+import Sisyphus.Language.Template
 
 
 data Options = Options
@@ -20,6 +21,7 @@ data Options = Options
   , warn_is_error :: Bool
   , print_statemachine :: Bool
   , outputdir :: FilePath
+  , template_root :: FilePath
   , fsm_name :: String
   , input_format :: String
   , targets :: [String]
@@ -33,6 +35,7 @@ options = cmdArgsMode $ Options
   , warn_is_error      = False            &= name "E" &= help "Warnings are treated as errors"
   , print_statemachine = False            &= name "p" &= help "Print the parsed state machine"
   , outputdir     = "."   &= typDir       &= name "d" &= help "Output will go in this directory"
+  , template_root = "."   &= typDir       &= name "T" &= help "The root directory of the sisyphus templates"
   , fsm_name      = "FSM" &= typ "NAME"   &= name "n" &= help "The name used for file names and variable prefixes"
   , input_format  = "sgf" &= typ "INPUT"  &= name "i" &= help "The input file format"
   , targets       = []    &= typ "TARGET" &= name "t" &= help "The target language of the generated FSM"
@@ -48,7 +51,8 @@ main = do
   when ((snd (A.bounds (smRegions stateMachine))) > 1) $ do
     putStrLn "Currently Sisyphus does not support hierarchical state machines."
     exitFailure
-  forM_ (targets opts) $ renderTarget stateMachine (outputdir opts)
+  let templateLoader = defaultTemplateLoader (template_root opts)
+  forM_ (targets opts) $ renderTarget templateLoader stateMachine (outputdir opts)
   when (print_statemachine opts) $ print stateMachine
   exitSuccess
   print "Done"

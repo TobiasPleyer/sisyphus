@@ -22,14 +22,17 @@ import Sisyphus.SisSyn
 import Sisyphus.Util
 
 
-defaultTemplateLoader :: FilePath -> IO (Maybe String)
-defaultTemplateLoader fn =
+type TemplateLoader = FilePath -> IO (Maybe String)
+
+
+defaultTemplateLoader :: FilePath -> FilePath -> IO (Maybe String)
+defaultTemplateLoader templateRoot fn =
   tryIOError (loadFile tfn) >>= \e ->
     case e of
       Right contents -> return (Just contents)
       Left _ -> return Nothing
   where
-    tfn = "templates" </> fn
+    tfn = templateRoot </> fn
 
     loadFile :: FilePath -> IO String
     loadFile f = openFile f ReadMode >>= hGetContents
@@ -47,9 +50,9 @@ printParseError err = do
   putStrLn (peErrorMessage err)
 
 
-renderFromFile context outDir tmplFile targetFile = do
+renderFromFile templateLoader context outDir tmplFile targetFile = do
   let outFile = outDir </> targetFile
-  parsedTmpl <- parseGingerFile defaultTemplateLoader tmplFile
+  parsedTmpl <- parseGingerFile templateLoader tmplFile
   case parsedTmpl of
     Left err -> do
       printParseError err
