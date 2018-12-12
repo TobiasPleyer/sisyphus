@@ -20,6 +20,7 @@ data Options = Options
   , warn_is_error :: Bool
   , print_statemachine :: Bool
   , outputdir :: FilePath
+  , fsm_name :: String
   , input_format :: String
   , targets :: [String]
   , files :: [FilePath]
@@ -32,6 +33,7 @@ options = cmdArgsMode $ Options
   , warn_is_error      = False            &= name "E" &= help "Warnings are treated as errors"
   , print_statemachine = False            &= name "p" &= help "Print the parsed state machine"
   , outputdir     = "."   &= typDir       &= name "d" &= help "Output will go in this directory"
+  , fsm_name      = "FSM" &= typ "NAME"   &= name "n" &= help "The name used for file names and variable prefixes"
   , input_format  = "sgf" &= typ "INPUT"  &= name "i" &= help "The input file format"
   , targets       = []    &= typ "TARGET" &= name "t" &= help "The target language of the generated FSM"
   , files         = []    &= typ "PATH"   &= args
@@ -42,7 +44,7 @@ main :: IO ()
 main = do
   opts <- cmdArgsRun options
   let file = head $ files opts
-  stateMachine <- compile (warn_is_error opts) (no_warnings opts) file
+  stateMachine <- compile (warn_is_error opts) (no_warnings opts) (fsm_name opts) file
   when ((snd (A.bounds (smRegions stateMachine))) > 1) $ do
     putStrLn "Currently Sisyphus does not support hierarchical state machines."
     exitFailure

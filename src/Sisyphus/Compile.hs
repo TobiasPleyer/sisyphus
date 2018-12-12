@@ -51,14 +51,16 @@ initialSummary :: GrammarSummary
 initialSummary = GS (-1) (-1) [] S.empty S.empty [] [] M.empty IM.empty IM.empty [] []
 
 compile :: Bool
-        -- ^ should warnings be treated as errors?
+        -- ^ Should warnings be treated as errors?
         -> Bool
-        -- ^ should warnings be ignored
+        -- ^ Should warnings be ignored
+        -> String
+        -- ^ The name of the state machine
         -> FilePath
         -- ^ The file containing the state machine definition
         -> IO StateMachine
-        -- ^ the final result should be a state machine in the IO Monad (or die)
-compile warnEqErr ignoreWarn file = do
+        -- ^ The final result should be a state machine in the IO Monad (or die)
+compile warnEqErr ignoreWarn fsm_name file = do
   let debug = True
   str <- readFile file
   decls <- case runP str parse of
@@ -93,7 +95,7 @@ compile warnEqErr ignoreWarn file = do
     eventList = S.toList $ gsEvents summary
     actionList = S.toList $ gsActions summary
     stateMachine = SM
-                    "Test_SM"
+                    fsm_name
                     (A.listArray (0, length eventList - 1) eventList)
                     (A.listArray (0, length actionList - 1) actionList)
                     stateArray
