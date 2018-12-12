@@ -10,6 +10,7 @@ Open : <entry> @blink_off @start_timer
 MovingUp : <entry> @blink_on
 MovingDown : <entry> @blink_on
 
+[*] -> Closed
 Open       --> MovingDown : timer_expired;
 Closed     --> MovingUp   : rope_event;
 Closed     --> MovingUp   : key_event;
