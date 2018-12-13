@@ -40,7 +40,7 @@ options = cmdArgsMode $ Options
   , input_format  = "sgf" &= typ "INPUT"  &= name "i" &= help "The input file format"
   , targets       = []    &= typ "TARGET" &= name "t" &= help "The target language of the generated FSM"
   , files         = []    &= typ "PATH"   &= args
-  } &= program "fsmg" &= summary "Sisyphus - Finite state machine generator v1.0.0.0"
+  } &= program "sisyphus" &= summary "Sisyphus - Finite state machine generator v1.0.0.0"
 
 
 main :: IO ()
