@@ -8,3 +8,8 @@ all:
 	alex -o src/Sisyphus/Lexer.hs specs/Lexer.x
 	happy -o src/Sisyphus/Parser.hs specs/Parser.y
 	stack build
+
+install:
+	stack install
+
+.PHONY: install
