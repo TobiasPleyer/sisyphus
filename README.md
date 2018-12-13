@@ -4,7 +4,7 @@
 
 ## What is Sisyphus?
 
-Sisyphus is meant to be a simple to use command line program to generates
+Sisyphus is meant to be a simple to use command line program to generate
 finite state machines, also known as finite automatons, into other target
 languages. Sisyphus is written in Haskell.
 
@@ -37,7 +37,7 @@ Actually compiling the program can be done either with
 Conveniently all of the above mentioned dependencies are included in the
 cross-platform
 [Haskell Platform](https://www.haskell.org/platform/). Further you will need
-git or download a .zip if you want the sources.
+git or you will have to download a .zip if you want the sources.
 
 So the recommended way to install Sisyphus is to:
 
