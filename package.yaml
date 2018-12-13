@@ -1,5 +1,5 @@
 name:                sisyphus
-version:             0.2.0.1
+version:             1.0.0.0
 github:              "TobiasPleyer/sisyphus"
 license:             BSD3
 author:              "Tobias Pleyer"
@@ -27,6 +27,7 @@ dependencies:
 - data-default
 - filepath
 - ginger
+- pretty-show
 - text
 - transformers
 

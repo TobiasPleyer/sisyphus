@@ -10,48 +10,57 @@ import Conduit
 import Control.Applicative (liftA2)
 import Control.Monad (forM_)
 import Data.Conduit
+import Data.Maybe (fromJust)
 import Data.Monoid
+import qualified Data.Array as A
 import qualified Data.Map.Strict as M
 import qualified Data.Text as T
 import System.FilePath
 import Text.Ginger
-import Sisyphus.Types
-import Sisyphus.Ginger
+import Sisyphus.SisSyn
 import Sisyphus.Util
 import Sisyphus.Language.Template
 
 
-cTemplateHeaderSimple = "C/fsm.h.tmpl"
-cTemplateSourceSimple = "C/fsm.c.tmpl"
-cTemplateSourceSimplePre = "C/fsm.c_pre.tmpl"
-cTemplateSourceSimplePost = "C/fsm.c_post.tmpl"
+renderCSimple :: TemplateLoader -> StateMachine -> FilePath -> IO ()
+renderCSimple templateLoader sm outDir = do
+  renderHeader templateLoader sm outDir
+  renderSource templateLoader sm outDir
 
-
-renderCSimple = renderCSimple_Hybrid
-
-
-renderCSimple_GingerOnly :: StateMachine -> FilePath -> IO ()
-renderCSimple_GingerOnly sm outDir = do
+renderHeader :: TemplateLoader -> StateMachine -> FilePath -> IO ()
+renderHeader templateLoader sm@SM{..} outDir = do
   let
-    name = smName sm
-    context  = mkContext sm
-  renderFromFile context outDir cTemplateHeaderSimple (name <.> "h")
-  renderFromFile context outDir cTemplateSourceSimple (name <.> "c")
+    target = smName <.> "h"
+    cHeaderTmpl = "C/fsm.h.tmpl"
+    context = makeContextText (
+      (M.!) (M.fromList [("FSM_NAME", toGVal smName)
+                        ,("FSM_EVENTS", toGVal $ A.elems smEvents)
+                        ,("FSM_ACTIONS", toGVal $ A.elems smActions)
+                        ,("FSM_STATES", toGVal $ map stnName (A.elems smStates))
+                        ]
+            )
+      )
+  renderFromFile templateLoader context outDir cHeaderTmpl target
 
 
-renderCSimple_Hybrid :: StateMachine -> FilePath -> IO ()
-renderCSimple_Hybrid sm outDir = do
+renderSource :: TemplateLoader -> StateMachine -> FilePath -> IO ()
+renderSource templateLoader sm@SM{..} outDir = do
   let
-    name = smName sm
-    context  = mkContext sm
-
-  renderFromFile context outDir cTemplateHeaderSimple (name <.> "h")
-
-  cSourceTemplatePre <- parseGingerFile defaultTemplateLoader cTemplateSourceSimplePre
-  cSourceTemplatePost <- parseGingerFile defaultTemplateLoader cTemplateSourceSimplePost
-
-  let parsedTemplates = liftA2 (,) cSourceTemplatePre cSourceTemplatePost
-  case parsedTemplates of
+    target = outDir </> smName <.> "c"
+    -- We need a better checking here
+    startState = (A.!) smStates $ fromJust $ srInitial $ (A.!) smRegions 0
+    context = makeContextText (
+      (M.!) (M.fromList [("FSM_NAME", toGVal smName)
+                        ,("FSM_EVENTS", toGVal $ A.elems smEvents)
+                        ,("FSM_STATES", toGVal $ map stnName (A.elems smStates))
+                        ,("FSM_START_STATE", toGVal $ stnName startState)
+                        ,("HAS_START_STATE_ENTRY", toGVal $ not $ null $ getAllEntries $ stnBehaviors startState)
+                        ]
+            )
+      )
+  preTmpl <- parseGingerFile templateLoader "C/fsm.c_pre.tmpl"
+  postTmpl <- parseGingerFile templateLoader "C/fsm.c_post.tmpl"
+  case (liftA2 (,) preTmpl postTmpl) of
     Left err -> do
       printParseError err
     Right (preTmpl,postTmpl) -> do
@@ -65,93 +74,94 @@ renderCSimple_Hybrid sm outDir = do
           yield $ runGinger context postTmpl
       runConduitRes $ source
                     .| encodeUtf8C
-                    .| sinkFile (outDir </> name <.> "c")
+                    .| sinkFile target
 
 
 emitEntries :: StateMachine -> ConduitT i T.Text (ResourceT IO) ()
 emitEntries SM{..} = do
   yield "/*** ENTRY FUNCTIONS ***/\n"
-  forM_ (M.elems smStates) (emitEntriesSt (T.pack smName))
+  forM_ (A.elems smStates) (emitEntriesSt (T.pack smName))
 
 
 emitExits :: StateMachine -> ConduitT i T.Text (ResourceT IO) ()
 emitExits SM{..} = do
   yield "/*** EXIT FUNCTIONS ***/\n"
-  forM_ (M.elems smStates) (emitExitsSt (T.pack smName))
+  forM_ (A.elems smStates) (emitExitsSt (T.pack smName))
 
 
-emitEntriesSt :: T.Text -> State -> ConduitT i T.Text (ResourceT IO) ()
-emitEntriesSt name State{..} = do
-  if (not $ null $ stEntryReactions) then do
-    yield $ "void " <> name <> "_" <> (T.pack stName) <> "__entry(" <> name <> "_t* pSM)\n{\n"
-    forM_ stEntryReactions $ \e -> forM_ (rspecReactions e) $ \r -> do
-      case r of
-        ActionCall a -> yield $ "\t" <> (T.pack a) <> "();\n"
-        EventEmit ev -> yield $ "\t" <> name <> "_AddSignal(pSM, " <> name <> "_" <> (T.pack ev) <> ");\n"
+emitEntriesSt :: T.Text -> (SisState Id) -> ConduitT i T.Text (ResourceT IO) ()
+emitEntriesSt name state@STNormal{..} = do
+  let entries = getAllEntries stnBehaviors
+  if (not $ null $ entries) then do
+    yield $ "void " <> name <> "_" <> (T.pack stnName) <> "__entry(" <> name <> "_t* pSM)\n{\n"
+    forM_ entries $ \e ->  do
+      case (seKind e) of
+        SEKAction -> yield $ "\t" <> (T.pack $ seName e) <> "();\n"
+        SEKEvent -> yield $ "\t" <> name <> "_AddSignal(pSM, " <> name <> "_" <> (T.pack $ seName e) <> ");\n"
     yield "}\n\n"
   else return ()
 
 
-emitExitsSt :: T.Text -> State -> ConduitT i T.Text (ResourceT IO) ()
-emitExitsSt name State{..} = do
-  if (not $ null $ stExitReactions) then do
-    yield $ "void " <> name <> "_" <> (T.pack stName) <> "__exit(" <> name <> "_t* pSM)\n{\n"
-    forM_ stExitReactions $ \e -> forM_ (rspecReactions e) $ \r -> do
-      case r of
-        ActionCall a -> yield $ "\t" <> (T.pack a) <> "();\n"
-        EventEmit ev -> yield $ "\t" <> name <> "_AddSignal(pSM, " <> name <> "_" <> (T.pack ev) <> ");\n"
+emitExitsSt :: T.Text -> (SisState Id) -> ConduitT i T.Text (ResourceT IO) ()
+emitExitsSt name state@STNormal{..} = do
+  let exits = getAllExits stnBehaviors
+  if (not $ null $ exits) then do
+    yield $ "void " <> name <> "_" <> (T.pack stnName) <> "__exit(" <> name <> "_t* pSM)\n{\n"
+    forM_ exits $ \e -> do
+      case (seKind e) of
+        SEKAction -> yield $ "\t" <> (T.pack $ seName e) <> "();\n"
+        SEKEvent -> yield $ "\t" <> name <> "_AddSignal(pSM, " <> name <> "_" <> (T.pack $ seName e) <> ");\n"
     yield "}\n\n"
   else return ()
 
 
 emitTransitions sm@SM{..} = do
   yield "/*** TRANSITION FUNCTIONS ***/\n"
-  forM_ (M.elems smStates) (emitTransitionsSt sm (T.pack smName))
+  forM_ (A.elems smStates) (emitTransitionsSt sm (T.pack smName))
 
 
 emitTransitionsSt sm name s = do
-  forM_ (stOutgoingTransitions s) $ \o -> do
+  forM_ (stnOutgoingTransitions s) $ \o -> do
     let
-      trigger = maybe "" T.pack (tspecTrigger o)
-      dstState = (smStates sm) M.! (tspecDst o)
-    yield $ "void " <> name <> "_" <> (T.pack (stName s)) <> "__on_" <> trigger <> "(" <> name <> "_t* pSM)\n{\n"
-    if (not $ null $ (stExitReactions s)) then
-      yield $ "\t" <> name <> "_" <> (T.pack (stName s)) <> "__exit(pSM);\n"
+      trigger = maybe "" T.pack (stTrigger o)
+      dstState = (smStates sm) A.! (stDst o)
+    yield $ "void " <> name <> "_" <> (T.pack (stnName s)) <> "__on_" <> trigger <> "(" <> name <> "_t* pSM)\n{\n"
+    if (not $ null $ (getAllExits $ stnBehaviors s)) then
+      yield $ "\t" <> name <> "_" <> (T.pack (stnName s)) <> "__exit(pSM);\n"
     else return ()
-    forM_ (tspecReactions o) $ \r -> do
-      case r of
-        ActionCall a -> yield $ "\t" <> (T.pack a) <> "();\n"
-        EventEmit ev -> yield $ "\t" <> name <> "_AddSignal(pSM, " <> name <> "_" <> (T.pack ev) <> ");\n"
-    if (not $ null $ (stEntryReactions dstState)) then
-      yield $ "\t" <> name <> "_" <> (T.pack (stName dstState)) <> "__entry(pSM);\n"
+    forM_ (stEffects o) $ \eff -> do
+      case (seKind eff) of
+        SEKAction -> yield $ "\t" <> (T.pack $ seName eff) <> "();\n"
+        SEKEvent -> yield $ "\t" <> name <> "_AddSignal(pSM, " <> name <> "_" <> (T.pack $ seName eff) <> ");\n"
+    if (not $ null $ (getAllEntries $ stnBehaviors dstState)) then
+      yield $ "\t" <> name <> "_" <> (T.pack (stnName dstState)) <> "__entry(pSM);\n"
     else return ()
-    yield $ "\tpSM->current_state = " <> name <> "_" <> (T.pack (stName dstState)) <> ";\n"
+    yield $ "\tpSM->current_state = " <> name <> "_" <> (T.pack (stnName dstState)) <> ";\n"
     yield "}\n\n"
-  forM_ (stInternalReactions s) $ \i -> do
+  forM_ (stnInternalTransitions s) $ \i -> do
     let
-      trigger = maybe "" T.pack (rspecTrigger i)
-    yield $ "void " <> name <> "_" <> (T.pack (stName s)) <> "__on_" <> trigger <> "(" <> name <> "_t* pSM)\n{\n"
-    forM_ (rspecReactions i) $ \r -> do
-      case r of
-        ActionCall a -> yield $ "\t" <> (T.pack a) <> "();\n"
-        EventEmit ev -> yield $ "\t" <> name <> "_AddSignal(pSM, " <> name <> "_" <> (T.pack ev) <> ");\n"
+      trigger = maybe "" T.pack (stTrigger i)
+    yield $ "void " <> name <> "_" <> (T.pack (stnName s)) <> "__on_" <> trigger <> "(pSM)\n{\n"
+    forM_ (stEffects i) $ \eff -> do
+      case (seKind eff) of
+        SEKAction -> yield $ "\t" <> (T.pack $ seName eff) <> "();\n"
+        SEKEvent -> yield $ "\t" <> name <> "_AddSignal(pSM, " <> name <> "_" <> (T.pack $ seName eff) <> ");\n"
     yield "}\n\n"
 
 
 emitTransitionTable sm = do
-  let
-    name = T.pack (smName sm)
+  let name = T.pack (smName sm)
   yield $ "transition_function_t* " <> name <> "_transition_table[" <> name <> "_NUM_STATES][" <> name <> "_NUM_EVENTS] = {\n"
-  forM_ (M.elems (smStates sm)) (emitTransitionTableRow sm name)
+  forM_ (A.elems (smStates sm)) (emitTransitionTableRow sm name)
   yield "};\n\n"
 
 
 emitTransitionTableRow sm name s = do
   let
-    events = smEvents sm
+    events = A.elems $ smEvents sm
     first = head events
     rest = tail events
-    state = T.pack (stName s)
+    state = T.pack (stnName s)
   yield "\t{"
   -- The first element of the row does not emit a comma
   if (s `isTriggeredBy` first)

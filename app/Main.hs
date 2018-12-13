@@ -3,22 +3,17 @@
 module Main where
 
 import Control.Monad (forM_, when)
+import qualified Data.Array as A
 import System.Console.CmdArgs
-import System.FilePath
 import System.Exit (exitFailure, exitSuccess, exitWith, ExitCode(..))
-import System.IO (stderr, hPutStr)
+import System.FilePath
 
-import Sisyphus.Types
-import Sisyphus.ParseMonad hiding (errors, warnings)
+import Sisyphus.Lexer
 import Sisyphus.Parser
+import Sisyphus.SisSyn
 import Sisyphus.Targets (supportedTargets, renderTarget)
-
-
-bye :: String -> IO a
-bye s = putStr s >> exitWith ExitSuccess
-
-die :: String -> IO a
-die s = hPutStr stderr s >> exitWith (ExitFailure 1)
+import Sisyphus.Compile
+import Sisyphus.Language.Template
 
 
 data Options = Options
@@ -26,6 +21,8 @@ data Options = Options
   , warn_is_error :: Bool
   , print_statemachine :: Bool
   , outputdir :: FilePath
+  , template_root :: FilePath
+  , fsm_name :: String
   , input_format :: String
   , targets :: [String]
   , files :: [FilePath]
@@ -38,45 +35,24 @@ options = cmdArgsMode $ Options
   , warn_is_error      = False            &= name "E" &= help "Warnings are treated as errors"
   , print_statemachine = False            &= name "p" &= help "Print the parsed state machine"
   , outputdir     = "."   &= typDir       &= name "d" &= help "Output will go in this directory"
+  , template_root = "."   &= typDir       &= name "T" &= help "The root directory of the sisyphus templates"
+  , fsm_name      = "FSM" &= typ "NAME"   &= name "n" &= help "The name used for file names and variable prefixes"
   , input_format  = "sgf" &= typ "INPUT"  &= name "i" &= help "The input file format"
   , targets       = []    &= typ "TARGET" &= name "t" &= help "The target language of the generated FSM"
   , files         = []    &= typ "PATH"   &= args
-  } &= program "fsmg" &= summary "Sisyphus - Finite state machine generator v0.2.0.1"
+  } &= program "sisyphus" &= summary "Sisyphus - Finite state machine generator v1.0.0.0"
 
 
 main :: IO ()
 main = do
   opts <- cmdArgsRun options
   let file = head $ files opts
-  sgf <- readFile file
-  smry <- case runP sgf parse of
-    Left (Just (AlexPn _ line col),err) ->
-            die (file ++ ":" ++ show line ++ ":" ++ show col
-                             ++ ": " ++ err ++ "\n")
-    Left (Nothing, err) ->
-            die (file ++ ": " ++ err ++ "\n")
-
-    Right grammarSummary -> return grammarSummary
-  when (and [ not $ null $ warnings smry
-            , not $ no_warnings opts
-            , not $ warn_is_error opts]) $ do
-    putStrLn "== Warnings =="
-    forM_ (warnings smry) putStrLn
-  -- This is the final summary after the command line flags have been evaluated
-  let summary = if (warn_is_error opts)
-                 then
-                   let errors' = (warnings smry) ++ (errors smry)
-                   in smry{errors=errors'}
-                 else smry
-  when (not $ null $ errors summary) $ do
-    putStrLn "The following errors prevent further processing:"
-    putStrLn "== Errors =="
-    forM_ (errors summary) putStrLn
+  stateMachine <- compile (warn_is_error opts) (no_warnings opts) (fsm_name opts) file
+  when ((snd (A.bounds (smRegions stateMachine))) > 1) $ do
+    putStrLn "Currently Sisyphus does not support hierarchical state machines."
     exitFailure
-  -- This is the state machine after the checks have been run
-  let statemachine = stateMachine summary
-  forM_ (targets opts) $ renderTarget statemachine (outputdir opts)
-  when (print_statemachine opts) $
-    print statemachine
-  print "Done"
+  let templateLoader = defaultTemplateLoader (template_root opts)
+  forM_ (targets opts) $ renderTarget templateLoader stateMachine (outputdir opts)
+  when (print_statemachine opts) $ print stateMachine
   exitSuccess
+  print "Done"
