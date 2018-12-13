@@ -56,7 +56,7 @@ Type `sisyphus --help` for a test. You should see Sisyphus' help text printed.
 ## Usage
 
 Sisyphus generates its output from so called grammar files. Grammar files are simply
-test files with a syntax understood by Sisyphus.
+text files with a syntax understood by Sisyphus.
 
 The list of supported input formats can be found below. Currently the only supported
 syntax is Sisyphus' own domain specific language, called
